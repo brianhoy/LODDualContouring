@@ -8,11 +8,17 @@ public static class UtilFuncs {
     public delegate float Sampler(float x, float y, float z);
 
     public static float Sample(float x, float y, float z) {
-        //float r = 0.14f;
-        float result = 0.5f - y;
-        //float result = (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r);
+        float r = 5.84f;
+        float result = Sphere(x, y, z);//1.5f - y;
+        //result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r);
         return result;
     }
+
+	public static float Sphere(float x, float y, float z) {
+		float r = 6f;
+		x-= 8; y -= 8; z -= 8;
+		return x * x + y * y + z * z - r * r;
+	}
 
     public static Vector3 Lerp(float isolevel, Point point1, Point point2) {
         if (Mathf.Abs(isolevel-point1.density) < 0.00001)
@@ -24,7 +30,14 @@ public static class UtilFuncs {
         float mu = (isolevel - point1.density) / (point2.density - point1.density); 
         return point1.position + mu * (point2.position - point1.position); 
     }
-
+    
+    public static Color SinColor(float value) {
+        float frequency = 0.3f;
+        float red   = Mathf.Sin(frequency*value + 0) * 0.5f + 0.5f;
+        float green = Mathf.Sin(frequency*value + 2) * 0.5f + 0.5f;
+        float blue  = Mathf.Sin(frequency*value + 4) * 0.5f + 0.5f;
+        return new Color(red, green, blue);
+    }
 }
 
 namespace Util {

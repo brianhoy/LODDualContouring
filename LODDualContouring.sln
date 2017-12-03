@@ -1,7 +1,7 @@
+﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2008
-
-Project("{4E22AD39-8036-6412-E2BB-0B05DFCEF285}") = "LODDualContouring", "Assembly-CSharp.csproj", "{BA57379C-411D-FF22-B0C1-F9BF1235A8AA}"
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LODDualContouring", "Assembly-CSharp.csproj", "{BA57379C-411D-FF22-B0C1-F9BF1235A8AA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
