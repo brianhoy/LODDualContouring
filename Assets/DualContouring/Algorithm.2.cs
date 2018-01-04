@@ -139,8 +139,6 @@ namespace SE.DC
 
 			Mesh m = new Mesh();
 
-			return m;
-
 			int resm1 = resolution - 1;
 
 			List<Vector3> normals = new List<Vector3>();
@@ -340,6 +338,65 @@ namespace SE.DC
 						byte caseCode = (byte)drawInfo.corners;
 						Vector3 p = new Vector3(x, y, z);
 
+						Vector3Int[][] DCEdgeOffsets = {
+							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0), new Vector3Int(0, 1, 1)},
+							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(1, 0, 0), new Vector3Int(1, 0, 1)},
+							new Vector3Int[] {new Vector3Int(0, 1, 0), new Vector3Int(1, 0, 0), new Vector3Int(1, 1, 0)}
+						};
+
+						Vector3Int[] Maxs = {
+							new Vector3Int(0, 1, 1), new Vector3Int(1, 0, 1),  new Vector3Int(1, 1, 0)
+						};
+
+						// DUMB CODE #2 (revised)
+						int[] vs = new int[4];
+						vs[0] = drawInfo.index;
+						//int v0 = drawInfo.index;
+						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
+						{
+							Vector3 max = Maxs[edgeNum];
+							Vector3Int[] ofs = DCEdgeOffsets[edgeNum];
+							if (p.x + max.x >= resolution || p.y + max.y >= resolution || p.z + max.z >= resolution)
+							{
+								latelateContinues++;
+								continue;
+							}
+
+							int ei0 = FarEdges[edgeNum, 0];
+							int ei1 = FarEdges[edgeNum, 1];
+
+							bool edge1 = (caseCode & (1 << ei0)) == (1 << ei0);
+							bool edge2 = (caseCode & (1 << ei1)) == (1 << ei1);
+
+							if (edge1 == edge2)
+							{
+								lateContinues++;
+								continue;
+							}
+
+							for(int v = 0; v < 3; v++) {
+								vs[v + 1] = drawInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z].index;
+							}
+
+							int[] t1 = { vs[0], vs[1], vs[3] };
+							int[] t2 = { vs[0], vs[3], vs[2] };
+
+							if (((caseCode >> ei0) & 1) == 1 != (edgeNum == 1))
+							{ // flip
+								t1[0] = vs[1]; t1[1] = vs[0];
+								t2[0] = vs[3]; t2[1] = vs[0];
+							} 
+							for (int i = 0; i < 3; i++)
+							{
+								indices.Add(t1[i]);
+							}
+							for(int i = 0; i < 3; i++) {
+								indices.Add(t2[i]);
+							}
+						}
+
+
+						// DUMB CODE
 						/*Debug.Log("P: " + p);
 
 						int v0 = drawInfo.index;
@@ -421,61 +478,6 @@ namespace SE.DC
 								indices.Add(indices.Count);
 							}
 						}*/
-
-						Vector3Int[][] DCEdgeOffsets = {
-							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0), new Vector3Int(0, 1, 1)},
-							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(1, 0, 0), new Vector3Int(1, 0, 1)},
-							new Vector3Int[] {new Vector3Int(0, 1, 0), new Vector3Int(1, 0, 0), new Vector3Int(1, 1, 0)}
-						};
-
-						// DUMB CODE #2 (revised)
-						int[] vs = new int[4];
-						vs[0] = drawInfo.index;
-						//int v0 = drawInfo.index;
-						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
-						{
-							Vector3Int[] ofs = DCEdgeOffsets[edgeNum];
-							if (p.x + 1 >= resolution || p.y + 1 >= resolution || p.z + 1 >= resolution)
-							{
-								latelateContinues++;
-								continue;
-							}
-
-							int ei0 = FarEdges[edgeNum, 0];
-							int ei1 = FarEdges[edgeNum, 1];
-
-							bool edge1 = (caseCode & (1 << ei0)) == (1 << ei0);
-							bool edge2 = (caseCode & (1 << ei1)) == (1 << ei1);
-
-							if (edge1 == edge2)
-							{
-								lateContinues++;
-								continue;
-							}
-
-							for(int v = 0; v < 3; v++) {
-								vs[v + 1] = drawInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z].index;
-							}
-
-							int[] t1 = { vs[0], vs[1], vs[3] };
-							int[] t2 = { vs[0], vs[3], vs[2] };
-
-							if (((caseCode >> ei0) & 1) == 1 != (edgeNum == 1))
-							{ // flip
-								t1[0] = vs[1]; t1[1] = vs[0];
-								t2[0] = vs[3]; t2[1] = vs[0];
-							} 
-							for (int i = 0; i < 3; i++)
-							{
-								indices.Add(t1[i]);
-							}
-							for(int i = 0; i < 3; i++) {
-								indices.Add(t2[i]);
-							}
-						}
-
-
-						// DUMB CODE
 
 						/*int v0 = drawInfo.index;
 						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
