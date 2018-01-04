@@ -24,10 +24,11 @@ public class DCController : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update () {
-		wrapper.Update(Camera.GetComponent<Transform>().position);
+		//wrapper.Update(Camera.GetComponent<Transform>().position);
 	}
 
-	void DrawGizmos() {
-		wrapper.DrawGizmos();
+	void OnDrawGizmos() {
+		if(wrapper != null)
+			wrapper.DrawGizmos();
 	}
 }

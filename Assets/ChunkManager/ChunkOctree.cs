@@ -4,9 +4,9 @@ using System.Collections;
 using UnityEngine;
 
 namespace SE.DC.Chunks {
-public class Node {
-    public Node[] Children;
-    public Node Parent;
+public class ChunkNode {
+    public ChunkNode[] Children;
+    public ChunkNode Parent;
     public Vector3 Position;
     public uint ID;
     public float Size;
@@ -14,25 +14,27 @@ public class Node {
     public int Depth;
     public Vector4 Key;
     public OctreeNode octree;
+	public OctreeDrawInfo[,,] drawInfos;
 };
 public class Root {
-    public Node RootNode;
-    public Dictionary<uint, Node> IDNodes; // index: ID | value: Node
-    public Dictionary<Vector4, Node> Nodes; //index: Vector4 (xyz=position, w=Depth) | value: Node
+    public ChunkNode RootNode;
+    public Dictionary<uint, ChunkNode> IDNodes; // index: ID | value: Node
+    public Dictionary<Vector4, ChunkNode> Nodes; //index: Vector4 (xyz=position, w=Depth) | value: Node
 }
 
-public static class Ops {
+public static class ChunkOctree {
     public static uint lastID = 1;
-    public static int RESOLUTION = 32; 
+    public static int RESOLUTION = 16; 
     public static int SAMPLE_FUNC = 0;
 
     // returns new octree from [-1, -1, -1] to [1, 1, 1]
-    public static Root Create() {
+    public static Root Create(int resolution) {
+		RESOLUTION = resolution;
         Root root = new Root();
-        root.Nodes = new Dictionary<Vector4, Node>();
-        root.IDNodes = new Dictionary<uint, Node>();
+        root.Nodes = new Dictionary<Vector4, ChunkNode>();
+        root.IDNodes = new Dictionary<uint, ChunkNode>();
 
-        Node rootNode = new Node();
+        ChunkNode rootNode = new ChunkNode();
         rootNode.Position = new Vector3(-1, -1, -1);
         rootNode.Size = 2;
         rootNode.IsLeaf = true;
@@ -45,14 +47,14 @@ public static class Ops {
         return root;
     }
 
-    public static void SplitNode(Root root, Node node) {
+    public static void SplitNode(Root root, ChunkNode node) {
         Debug.Assert(node.IsLeaf);
 
         node.IsLeaf = false;
-        node.Children = new Node[8];
+        node.Children = new ChunkNode[8];
 
         for(int i = 0; i < 8; i++) {
-            Node n = new Node();
+            ChunkNode n = new ChunkNode();
             node.Children[i] = n;
             n.Size = node.Size / 2f;
             n.ID = lastID;
@@ -67,7 +69,7 @@ public static class Ops {
         }
     }
 
-    public static void CoarsenNode(Root root, Node node) {
+    public static void CoarsenNode(Root root, ChunkNode node) {
         UnityEngine.Debug.Assert(node.ID != 0);
         
         for(int i = 0; i < 8; i++) {
@@ -122,7 +124,7 @@ public static class Ops {
         for(int i = 0; i < maxIterations; i++) {
             Hashtable splitList = new Hashtable();
             bool result = RecursiveMakeConforming(root, root.RootNode, splitList);
-            foreach(Node n in splitList.Values) {
+            foreach(ChunkNode n in splitList.Values) {
                 if(n.IsLeaf) {
                     SplitNode(root, n);
                 }
@@ -138,16 +140,13 @@ public static class Ops {
         }
     }
 
-    public static bool RecursiveMakeConforming(Root root, Node node, Hashtable splitList) {
+    public static bool RecursiveMakeConforming(Root root, ChunkNode node, Hashtable splitList) {
         bool returning = true;
         if(node.IsLeaf) {
-            Node[] neighbors = FindNeighbors(root, node);
+            ChunkNode[] neighbors = FindNeighbors(root, node);
             //Debug.Log("neighbors length: " + neighbors.Count);
-            foreach(Node neighbor in neighbors) {
+            foreach(ChunkNode neighbor in neighbors) {
                 if(neighbor == null) continue;
-                if(node.ID == 28) {
-                    Debug.Log("node #" + node.ID + " depth: " + node.Depth + ", neighbor (#" + neighbor.ID + ") depth: " + neighbor.Depth);
-                }
                 if(node.Depth - 1 > neighbor.Depth && neighbor.IsLeaf) {
                     //Debug.Assert(neighbor.IsLeaf);
                     //Debug.LogWarning("Splitting node " + neighbor.ID + " to make octree conforming");
@@ -173,16 +172,29 @@ public static class Ops {
         new Vector3(-1, 0, 0), new Vector3(1, 0, 0), 
         new Vector3(0, -1, 0), new Vector3(0, 1, 0), 
         new Vector3(0, 0, -1), new Vector3(0, 0, 1) };
-    public static Node[] FindNeighbors(Root root, Node node) {
-        Node[] neighbors = new Node[6];
+	public static readonly Vector3[] SeamDirections = {
+        new Vector3(1, 0, 0), new Vector3(0, 1, 0), 
+        new Vector3(1, 1, 0), new Vector3(0, 0, 1), 
+        new Vector3(1, 0, 1), new Vector3(0, 1, 1), 
+		new Vector3(1, 1, 1)};
+    public static ChunkNode[] FindNeighbors(Root root, ChunkNode node) {
+        ChunkNode[] neighbors = new ChunkNode[6];
         for(int i = 0; i < 6; i++) {
-            Vector3 dir = Ops.Directions[i];
+            Vector3 dir = ChunkOctree.Directions[i];
             neighbors[i] = RecursiveGetNeighbor(root, node, dir);
         }
         return neighbors;
     }
+	public static ChunkNode[] FindSeamNodes(Root root, ChunkNode node) {
+		ChunkNode[] seamNodes = new ChunkNode[7];
+        for(int i = 0; i < 7; i++) {
+            Vector3 dir = ChunkOctree.SeamDirections[i];
+            seamNodes[i] = RecursiveGetNeighbor(root, node, dir);
+        }
+        return seamNodes;
+	}
 
-    public static Node RecursiveGetNeighbor(Root root, Node node, Vector3 direction) {
+    public static ChunkNode RecursiveGetNeighbor(Root root, ChunkNode node, Vector3 direction) {
         if(node.Depth == 0) {
             return null;
         }
@@ -195,7 +207,7 @@ public static class Ops {
         }
     }
 
-    public static Vector4 GetCollapsedCode(Node node, Vector3 direction) {
+    public static Vector4 GetCollapsedCode(ChunkNode node, Vector3 direction) {
         Vector3 scaled = (direction*2)/Mathf.Pow(2, node.Depth);
         Vector3 newPos = node.Position + scaled;
 
@@ -203,7 +215,7 @@ public static class Ops {
     }
 
 
-    public static void RecursiveRefine(Root root, Node node, Vector3 position, int maxDepth) {
+    public static void RecursiveRefine(Root root, ChunkNode node, Vector3 position, int maxDepth) {
         //Debug.Log("Recursive refine at level " + node.Depth + ". PointInNode: " + PointInNode(node, position));
         if(node.IsLeaf) {
             if(node.Depth < maxDepth && PointInNode(node, position)) {
@@ -217,7 +229,7 @@ public static class Ops {
         }
     }
 
-    public static bool RecursiveCoarsen(Root root, Node node, Vector3 position) {
+    public static bool RecursiveCoarsen(Root root, ChunkNode node, Vector3 position) {
         bool returning = true;
         if(node.IsLeaf) {
             if(!PointInNode(node.Parent, position) && node.Depth != 0) {
@@ -235,7 +247,7 @@ public static class Ops {
         return returning;
     }
 
-    public static bool PointInNode(Node node, Vector3 point) {
+    public static bool PointInNode(ChunkNode node, Vector3 point) {
         return (point.x >= 
                 node.Position.x && 
                 point.y >= 
@@ -248,66 +260,68 @@ public static class Ops {
                 point.z <= (node.Position.z + node.Size));
     }
 
-    public static void DrawGizmos(Node octree) {
-        DrawGizmosRecursive(octree);
+    public static void DrawGizmos(ChunkNode octree, float WorldSize) {
+        DrawGizmosRecursive(octree, WorldSize);
     }
 
-    public static void DrawGizmosRecursive(Node node) {
+    public static void DrawGizmosRecursive(ChunkNode node, float WorldSize) {
         if(!node.IsLeaf) {
             for(int i = 0; i < 8; i++) {
-                DrawGizmosRecursive(node.Children[i]);
+                DrawGizmosRecursive(node.Children[i], WorldSize);
             }
         }
-        DrawNode(node);
+        DrawNode(node, WorldSize);
     }
 
-    public static float scale = 64f;
-    public static void DrawNode(Node node) {
+    public static void DrawNode(ChunkNode node, float WorldSize) {
         Gizmos.color = UtilFuncs.SinColor( ((float)(node.Depth) * 15f));
-        UnityEngine.Gizmos.DrawWireCube( (node.Position + new Vector3(node.Size / 2f, node.Size / 2f, node.Size / 2f)) * scale, node.Size * Vector3.one * scale);
+        UnityEngine.Gizmos.DrawWireCube( (node.Position + new Vector3(node.Size / 2f, node.Size / 2f, node.Size / 2f)) * WorldSize, node.Size * Vector3.one * WorldSize);
     }
 
     public static float minX = float.MaxValue;
     public static float maxX = float.MinValue;
 
-    public static Mesh PolyganizeNode(Root root, Node node, float WorldSize) {
-        float mul =  Mathf.Pow(2, -node.Size);
+    public static Mesh PolyganizeNode(Root root, ChunkNode node, float WorldSize) {
+        float mul =  Mathf.Pow(2, -node.Depth);
         float nodeSize = mul * WorldSize;
+        
+		float size = WorldSize / (Mathf.Pow(2, node.Depth)) * 4;
 
-		Mesh m = Algorithm2.Run(16);
-		Debug.Log("Got here");
+		//Debug.Log("nodeSize: " + size);
+
+		float factor = Mathf.Pow(2, -node.Depth + 1) * (1f/(float)RESOLUTION);
+
+		UtilFuncs.Sampler samp = (float x, float y, float z) => UtilFuncs.Sample((x * factor + node.Position.x)  * WorldSize, (y * factor + node.Position.y) * WorldSize, (z * factor + node.Position.z) * WorldSize);
+
+		Mesh m = Algorithm2.Run(RESOLUTION, samp, node, 1f);
+		//Debug.Log("Got here");
 
         /*ExtractionInput input = new ExtractionInput();
         input.Isovalue = 0f;
         input.Resolution = new Util.Vector3i(16, 16, 16);
         float size = WorldSize / (Mathf.Pow(2, node.Depth));
         input.Size = new Vector3(node.Size/16f, node.Size/16f, node.Size/16f);
-        input.Sample = (float x, float y, float z) => UtilFuncs.Sample((x + node.Position.x)  * WorldSize, (y + node.Position.y) * WorldSize, (z + node.Position.z) * WorldSize);
         input.LODSides = new byte();*/
-        
-        List<Vector3> vertices = new List<Vector3>();
-        List<Vector3> normals = new List<Vector3>();
-        List<int> indices = new List<int>();
-
-        
-        Algorithm.GenerateVertexIndices(octree, vertices, normals);
-        Algorithm.ContourCellProc(octree, indices);
+                
 
 
-
-        Node[] neighbors = FindNeighbors(root, node);
+        //Node[] seamNodes = FindSeamNodes(root, node);
 
         int currentSide = 1;
-
-        Mesh m = new Mesh();
-        m.vertices = vertices.ToArray();
-        m.normals = normals.ToArray();
-        m.triangles = indices.ToArray();
 
         return m;
     }
 
-    public static Node GetSeamNodes(Root root, Node node) {
+	public static Mesh PolyganizeNodeSeam(Root root, ChunkNode node) {
+		Debug.Assert(node != null && node.IsLeaf);
+
+		ChunkNode[] seamNodes = FindSeamNodes(root, node);
+		Mesh m = Algorithm2.GenSeamMesh(RESOLUTION, node, seamNodes);
+
+		return m;
+	}
+
+    public static ChunkNode GetSeamNodes(Root root, ChunkNode node) {
 
 
         return null;

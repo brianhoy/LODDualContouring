@@ -8,15 +8,17 @@ public static class UtilFuncs {
     public delegate float Sampler(float x, float y, float z);
 
     public static float Sample(float x, float y, float z) {
-        float r = 5.84f;
-        float result = Sphere(x, y, z);//1.5f - y;
-        //result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r);
+        float r = 0.034f;
+		float result = 0f;
+        result += -1.5f + y; 
+		//result += Sphere(x, y, z);
+        result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
         return result;
     }
 
 	public static float Sphere(float x, float y, float z) {
-		float r = 6f;
-		x-= 8; y -= 8; z -= 8;
+		float r = 0.5f;
+		x-= 0.5f; y -= 0.5f; z -= 0.5f;
 		return x * x + y * y + z * z - r * r;
 	}
 

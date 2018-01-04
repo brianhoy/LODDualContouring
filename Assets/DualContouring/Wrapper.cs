@@ -14,21 +14,182 @@ public class Wrapper {
         Parent = parent;
         ChunkPrefab = chunkPrefab;
 
-        MeshedNodes = new List<Chunks.Node>();
+        MeshedNodes = new List<Chunks.ChunkNode>();
         UnityObjects = new Hashtable();
         WorldSize = worldSize;
         MaxDepth = maxDepth;
         Resolution = resolution;
-        ChunkRoot = Chunks.Ops.Create();
+        ChunkRoot = Chunks.ChunkOctree.Create(resolution);
+		//Chunks.Ops.SplitNode(ChunkRoot, ChunkRoot.RootNode);
 
-		RunTest();
+        MeshLeaves();
+
+		GenerateSeamMesh(ChunkRoot.RootNode.Children[3]);
+		//RunTest();
     }
 
+    Chunks.Root ChunkRoot;
+    List<Chunks.ChunkNode> MeshedNodes; 
+    Hashtable UnityObjects;
+    public float WorldSize;
+    public int MaxDepth;
+    public int Resolution;
+
+    public void Update(Vector3 position) {
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+
+        //sw.Start();
+        //Chunks.Ops.Adapt(ChunkRoot, position / WorldSize, MaxDepth, 15);
+        //sw.Stop(); //Debug.Log("BENCH-UPDATE: SE.Octree.Ops.Adapt time: " + (float)sw.ElapsedMilliseconds/1000f + " seconds.");
+        //sw.Reset(); sw.Start();
+        //sw.Stop(); //Debug.Log("BENCH-UPDATE: Mesh time: " + (float)sw.ElapsedMilliseconds/1000f + " seconds.");
+    }
+
+    public void MakeConforming() {
+        //Ops.LoopMakeConforming(Root, 2);
+    }
+
+    public void DrawGizmos() {
+        //Chunks.ChunkOctree.DrawGizmos(ChunkRoot.RootNode, WorldSize);
+		Gizmos.color = Color.green;
+		foreach(Vector4 box in Algorithm2.BoundaryCellGizmos) {
+			//Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
+		}
+		Gizmos.color = Color.red;
+		foreach(Vector4 box in Algorithm2.EdgeCellGizmos) {
+			//Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
+		}
+		Gizmos.color = Color.blue;
+		foreach(Vector4 box in Algorithm2.MainEdgeCellGizmos) {
+			Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
+		}
+		Gizmos.color = Color.magenta;
+		foreach(Edge e in Algorithm2.Edges) {
+			//Gizmos.DrawLine(e.A, e.B);
+		}
+
+        //Debugger.DrawGizmos();
+    }
+
+    public void MeshLeaves() {
+        List<Chunks.ChunkNode> newLeafNodes = new List<Chunks.ChunkNode>();
+        PopulateLeafNodeList(ChunkRoot.RootNode, newLeafNodes);
+
+        float totalPolyganizeNodeTime = 0f;
+        float totalAllBeforeTime = 0f;
+
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+
+        foreach(Chunks.ChunkNode n in MeshedNodes.Except(newLeafNodes)) {
+            Object.Destroy((GameObject)UnityObjects[n.ID]);
+            UnityObjects.Remove(n.ID);
+        }
+        foreach(Chunks.ChunkNode n in newLeafNodes.Except(MeshedNodes)) {
+            MeshNode(n, ref totalPolyganizeNodeTime, ref totalAllBeforeTime, sw);
+        }
+
+        Debug.Log("BENCH-MESH: AllBefore time: " + totalAllBeforeTime + " seconds.");
+        Debug.Log("BENCH-MESH: PolyganizeNode time: " + totalPolyganizeNodeTime + " seconds.");
+
+        MeshedNodes = newLeafNodes;
+    }
+
+
+    public void MeshNode(Chunks.ChunkNode node, ref float totalPolyganizeNodeTime, ref float totalAllBeforeTime, System.Diagnostics.Stopwatch sw) {
+        sw.Start();
+        GameObject clone = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+        Color c = UtilFuncs.SinColor(node.Depth * 3f);
+        clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
+        clone.transform.localScale = Vector3.one * (WorldSize / Resolution) * Mathf.Pow(2f, -node.Depth + 1);
+        clone.name = "Node " + node.ID + ", Depth " + node.Depth;
+        
+
+        MeshFilter mf = clone.GetComponent<MeshFilter>();
+        sw.Stop();
+        totalAllBeforeTime += (float)sw.ElapsedMilliseconds/1000f;
+        sw.Reset(); sw.Start();
+        mf.mesh = Chunks.ChunkOctree.PolyganizeNode(ChunkRoot, node, WorldSize);
+        sw.Stop();
+        totalPolyganizeNodeTime += (float)sw.ElapsedMilliseconds/1000f;
+        clone.GetComponent<Transform>().SetParent(Parent);
+        clone.GetComponent<Transform>().SetPositionAndRotation(node.Position * WorldSize, Quaternion.identity);
+
+        UnityObjects[node.ID] = clone;
+
+    }
+    public void PopulateLeafNodeList(Chunks.ChunkNode node, List<Chunks.ChunkNode> leafNodes) {
+        if(node.IsLeaf) {
+            leafNodes.Add(node);
+        }
+        else {
+            for(int i = 0; i < node.Children.Length; i++) {
+                PopulateLeafNodeList(node.Children[i], leafNodes);
+            }
+        }
+    }
+
+	private void GenerateSeamMesh(Chunks.ChunkNode node) {
+        GameObject clone = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+        Color c = UtilFuncs.SinColor(node.Depth * 3f);
+        clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.6f);
+        clone.transform.localScale = Vector3.one * (WorldSize / Resolution) * Mathf.Pow(2f, -node.Depth + 1);
+        clone.name = "Node " + node.ID + " Seam, Depth " + node.Depth;
+        
+
+        MeshFilter mf = clone.GetComponent<MeshFilter>();
+        mf.mesh = Chunks.ChunkOctree.PolyganizeNodeSeam(ChunkRoot, node);
+        clone.GetComponent<Transform>().SetParent(Parent);
+        clone.GetComponent<Transform>().SetPositionAndRotation(node.Position * WorldSize, Quaternion.identity);
+
+        UnityObjects[node.ID] = clone;
+	}
+
+
+    private void InstantiateMesh(UnityEngine.Mesh m, Vector3 offset) {
+		GameObject isosurfaceMesh = Object.Instantiate(ChunkPrefab, offset, Quaternion.identity);
+		Debug.Log("Instantiate called");
+        isosurfaceMesh.GetComponent<Transform>().SetParent(Parent);
+		//Meshes.Add(isosurfaceMesh);
+
+		Material mat = isosurfaceMesh.GetComponent<Renderer>().materials[0];
+		MeshFilter mf = isosurfaceMesh.GetComponent<MeshFilter>();
+		MeshCollider mc = isosurfaceMesh.GetComponent<MeshCollider>();
+
+		mf.mesh = m;
+		mc.sharedMesh = mf.mesh;
+		mf.mesh.normals = m.normals;
+		//mf.mesh.RecalculateNormals();
+		mf.mesh.RecalculateBounds();
+    }
+
+    public static SE.OpenSimplexNoise s = new SE.OpenSimplexNoise();
+    public static UtilFuncs.Sampler[] sampleFuncs = {
+        (float x, float y, float z) => {
+            float r = 0.54f;
+            float result = 0.5f + y;
+            result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
+            return result;
+        },
+        (float x, float y, float z) => {
+            float r = 0.54f;
+            float result = -0.5f + y;
+            result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 75f;
+            return result;
+        }
+
+    };
+
+}
+}
+
+
+
+/*
 	private void RunTest() {
 		int resolution = 32;
-		sbyte[] data = GetData(UtilFuncs.Sample, resolution, 0, 0, 0, 16);
-        Mesh m = Algorithm2.Run(32, data);//GenerateMesh(32, 0, sampleFuncs[1], false);
-        InstantiateMesh(m, Vector3.zero);
+		//sbyte[] data = GetData(UtilFuncs.Sample, resolution, 0, 0, 0, 16);
+        //Mesh m = Algorithm2.Run(32, UtilFuncs.Sample, 1f);//GenerateMesh(32, 0, sampleFuncs[1], false);
+        //InstantiateMesh(m, Vector3.zero);
 	}
 
     private Mesh GenerateMesh(int resolution, float isovalue, UtilFuncs.Sampler sample, bool flatShading) {
@@ -71,55 +232,6 @@ public class Wrapper {
         m.normals = normals.ToArray();
         m.triangles = indices.ToArray();
         return m;
-    }
-
-    Chunks.Root ChunkRoot;
-    List<Chunks.Node> MeshedNodes; 
-    Hashtable UnityObjects;
-    public float WorldSize;
-    public int MaxDepth;
-    public int Resolution;
-
-    public void Update(Vector3 position) {
-        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-        sw.Start();
-        //Chunks.Ops.Adapt(ChunkRoot, position / WorldSize, MaxDepth, 15);
-        sw.Stop(); //Debug.Log("BENCH-UPDATE: SE.Octree.Ops.Adapt time: " + (float)sw.ElapsedMilliseconds/1000f + " seconds.");
-        sw.Reset(); sw.Start();
-        //Mesh();
-        sw.Stop(); //Debug.Log("BENCH-UPDATE: Mesh time: " + (float)sw.ElapsedMilliseconds/1000f + " seconds.");
-    }
-
-    public void MakeConforming() {
-        //Ops.LoopMakeConforming(Root, 2);
-    }
-
-    public void DrawGizmos() {
-        Chunks.Ops.DrawGizmos(ChunkRoot.RootNode);
-        //Debugger.DrawGizmos();
-    }
-
-    public void Mesh() {
-        List<Chunks.Node> newLeafNodes = new List<Chunks.Node>();
-        PopulateLeafNodeList(ChunkRoot.RootNode, newLeafNodes);
-
-        float totalPolyganizeNodeTime = 0f;
-        float totalAllBeforeTime = 0f;
-
-        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-
-        foreach(Chunks.Node n in MeshedNodes.Except(newLeafNodes)) {
-            Object.Destroy((GameObject)UnityObjects[n.ID]);
-            UnityObjects.Remove(n.ID);
-        }
-        foreach(Chunks.Node n in newLeafNodes.Except(MeshedNodes)) {
-            MeshNode(n, ref totalPolyganizeNodeTime, ref totalAllBeforeTime, sw);
-        }
-
-        Debug.Log("BENCH-MESH: AllBefore time: " + totalAllBeforeTime + " seconds.");
-        Debug.Log("BENCH-MESH: PolyganizeNode time: " + totalPolyganizeNodeTime + " seconds.");
-
-        MeshedNodes = newLeafNodes;
     }
 
 	public sbyte[] GetData(UtilFuncs.Sampler sample, int resolution, float xOff, float yOff, float zOff, float scale) {
@@ -171,73 +283,5 @@ public class Wrapper {
 		return new Vector3(dx, dy, dz).normalized;
 	}
 
-    public void PopulateLeafNodeList(Chunks.Node node, List<Chunks.Node> leafNodes) {
-        if(node.IsLeaf) {
-            leafNodes.Add(node);
-        }
-        else {
-            for(int i = 0; i < node.Children.Length; i++) {
-                PopulateLeafNodeList(node.Children[i], leafNodes);
-            }
-        }
-    }
 
-    public void MeshNode(Chunks.Node node, ref float totalPolyganizeNodeTime, ref float totalAllBeforeTime, System.Diagnostics.Stopwatch sw) {
-        sw.Start();
-        GameObject clone = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
-        Color c = UtilFuncs.SinColor(node.Depth * 3f);
-        clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
-        clone.transform.localScale = Vector3.one * (WorldSize / Resolution) * Mathf.Pow(2f, -node.Depth + 1);
-        clone.name = "Node " + node.ID + ", Depth " + node.Depth;
-        
-
-        MeshFilter mf = clone.GetComponent<MeshFilter>();
-        sw.Stop();
-        totalAllBeforeTime += (float)sw.ElapsedMilliseconds/1000f;
-        sw.Reset(); sw.Start();
-        mf.mesh = Chunks.Ops.PolyganizeNode(ChunkRoot, node, WorldSize);
-        sw.Stop();
-        totalPolyganizeNodeTime += (float)sw.ElapsedMilliseconds/1000f;
-        clone.GetComponent<Transform>().SetParent(Parent);
-        clone.GetComponent<Transform>().SetPositionAndRotation(node.Position * WorldSize, Quaternion.identity);
-
-        UnityObjects[node.ID] = clone;
-    }
-
-
-    private void InstantiateMesh(UnityEngine.Mesh m, Vector3 offset) {
-		GameObject isosurfaceMesh = Object.Instantiate(ChunkPrefab, offset, Quaternion.identity);
-		Debug.Log("Instantiate called");
-        isosurfaceMesh.GetComponent<Transform>().SetParent(Parent);
-		//Meshes.Add(isosurfaceMesh);
-
-		Material mat = isosurfaceMesh.GetComponent<Renderer>().materials[0];
-		MeshFilter mf = isosurfaceMesh.GetComponent<MeshFilter>();
-		MeshCollider mc = isosurfaceMesh.GetComponent<MeshCollider>();
-
-		mf.mesh = m;
-		mc.sharedMesh = mf.mesh;
-		mf.mesh.normals = m.normals;
-		//mf.mesh.RecalculateNormals();
-		mf.mesh.RecalculateBounds();
-    }
-
-    public static SE.OpenSimplexNoise s = new SE.OpenSimplexNoise();
-    public static UtilFuncs.Sampler[] sampleFuncs = {
-        (float x, float y, float z) => {
-            float r = 0.54f;
-            float result = 0.5f + y;
-            result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
-            return result;
-        },
-        (float x, float y, float z) => {
-            float r = 0.54f;
-            float result = -0.5f + y;
-            result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 75f;
-            return result;
-        }
-
-    };
-
-}
-}
+ */
