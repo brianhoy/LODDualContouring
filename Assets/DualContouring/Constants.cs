@@ -17,14 +17,19 @@ namespace SE.DC {
 	public static readonly int MAX_CROSSINGS = 6;
 
 	public static int[,] ioffsets = {
-        {0,0,0}, {1,0,0}, {1,1,0}, {0,1,0}, 
-        {0,0,1}, {1,0,1}, {1,1,1}, {0,1,1} 
+        {0,0,0}, {0,0,1}, {0,1,0}, {0,1,1}, 
+        {1,0,0}, {1,0,1}, {1,1,0}, {1,1,1} 
 	};
 
-    public static Vector3[] Offsets = {
-        new Vector3(0f,0f,0f), new Vector3(1f,0f,0f), new Vector3(1f,1f,0f), new Vector3(0f,1f,0f), 
-        new Vector3(0f,0f,1f), new Vector3(1f,0f,1f), new Vector3(1f,1f,1f), new Vector3(0f,1f,1f) 
+    public static Vector3[] vfoffsets = {
+		new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
+		new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)
     };
+
+	public static Vector3Int[] vioffsets = {
+		new Vector3Int(0, 0, 0), new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0), new Vector3Int(0, 1, 1),
+		new Vector3Int(1, 0, 0), new Vector3Int(1, 0, 1), new Vector3Int(1, 1, 0), new Vector3Int(1, 1, 1)
+	};
 
 	public static readonly int[][] edgevmap = 
 	{

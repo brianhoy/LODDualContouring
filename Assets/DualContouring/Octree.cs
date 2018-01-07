@@ -21,9 +21,16 @@ public class OctreeDrawInfo
 
 public class OctreeNode
 {
+	// Brian's util vars
+	public float fsize;
+	public bool subChunk = false;
+	public Vector3 fmin;
+	public Vector3Int cmin;
+
 	public DCC.OctreeNodeType type;
 	public Vector3 min;
 	public int size;
+
 	public OctreeNode[] children;
 	public OctreeDrawInfo drawInfo;
 

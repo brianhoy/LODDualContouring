@@ -61,7 +61,7 @@ public static class ChunkOctree {
             n.Depth = node.Depth + 1;
             lastID++;
             n.Parent = node;
-            n.Position = node.Position + (DCC.Offsets[i] * n.Size);
+            n.Position = node.Position + (DCC.vfoffsets[i] * n.Size);
             n.IsLeaf = true;
             n.Key = new Vector4(n.Position.x, n.Position.y, n.Position.z, n.Depth);
             root.Nodes.Add(n.Key, n);

@@ -28,7 +28,8 @@ public class DCController : MonoBehaviour {
 	}
 
 	void OnDrawGizmos() {
-		if(wrapper != null)
+		if(wrapper != null) {
 			wrapper.DrawGizmos();
+		}
 	}
 }

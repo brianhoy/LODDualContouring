@@ -20,12 +20,6 @@ namespace SE.DC
 		public static List<Vector4> MainEdgeCellGizmos = new List<Vector4>();
 		public static List<Edge> Edges = new List<Edge>();
 
-
-		public static readonly Vector3[] CHILD_MIN_OFFSETS = {
-			new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
-			new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)
-		};
-
 		static readonly int[,] FarEdges = { { 3, 7 }, { 5, 7 }, { 6, 7 } };
 
 		public static Mesh Run(int resolution, UtilFuncs.Sampler samp, Chunks.ChunkNode node, float scaleFactor)
@@ -65,7 +59,7 @@ namespace SE.DC
 
 						for (int i = 0; i < 8; i++)
 						{
-							Vector3 pos = new Vector3(x, y, z) + CHILD_MIN_OFFSETS[i];
+							Vector3 pos = new Vector3(x, y, z) + DCC.vfoffsets[i];
 							densities[i] = (sbyte)Mathf.Clamp((samp(pos.x, pos.y, pos.z) * 127f), -127f, 127f); //data[index + inArray[i]];
 
 							if (densities[i] < 0) { caseCode |= (byte)(1 << i); }
@@ -79,8 +73,8 @@ namespace SE.DC
 							byte c1 = (byte)DCC.edgevmap[i][0];
 							byte c2 = (byte)DCC.edgevmap[i][1];
 
-							Vector3 p1 = new Vector3(x, y, z) + CHILD_MIN_OFFSETS[c1];
-							Vector3 p2 = new Vector3(x, y, z) + CHILD_MIN_OFFSETS[c2];
+							Vector3 p1 = new Vector3(x, y, z) + DCC.vfoffsets[c1];
+							Vector3 p2 = new Vector3(x, y, z) + DCC.vfoffsets[c2];
 
 							bool m1 = ((caseCode >> c1) & 1) == 1;
 							bool m2 = ((caseCode >> c2) & 1) == 1;
@@ -135,6 +129,7 @@ namespace SE.DC
 
 		public static Mesh GenSeamMesh(int resolution, Chunks.ChunkNode ogNode, Chunks.ChunkNode[] seamNodes)
 		{
+			Debug.Assert(ogNode.IsLeaf);
 			Debug.Log("Seam ogNode: " + ogNode);
 
 			Mesh m = new Mesh();
@@ -144,9 +139,19 @@ namespace SE.DC
 			List<Vector3> normals = new List<Vector3>();
 			List<Vector3> vertices = new List<Vector3>();
 			List<int> indices = new List<int>();
+			float nodeSize = ogNode.Size * worldSize;
+			float cellsize = nodeSize / (float)resolution;
+
+			Chunks.ChunkNode[] octants = new Chunks.ChunkNode[8];
+			octants[0] = ogNode;
+			for(int i = 1; i < 8; i++) {
+				octants[i] = seamNodes[i - 1];
+			}
+
+			GenSeamOctree(octants);
 
 			//iterate through all cells of ogNode
-			for (int x = 0; x < resolution; x++)
+			/*for (int x = 0; x < resolution; x++)
 			{
 				for (int y = 0; y < resolution; y++)
 				{
@@ -155,19 +160,10 @@ namespace SE.DC
 						Vector3 p = new Vector3(x, y, z);
 
 						// if any coord is not a max, skip voxel
-						if (x != resm1 && y != resm1 && z != resm1)
-						{
-							continue;
-						}
-
-
+						if (x != resm1 && y != resm1 && z != resm1) continue;
 						if (ogNode.drawInfos[x, y, z] == null) continue;
 
 						OctreeDrawInfo info = ogNode.drawInfos[x, y, z];
-
-						float nodeSize = ogNode.Size * worldSize;
-						float cellsize = nodeSize / (float)resolution;
-
 						Vector3 center = new Vector3(x, y, z) * cellsize + (Vector3.one * (cellsize / 2)) + ogNode.Position * worldSize;
 						BoundaryCellGizmos.Add(new Vector4(center.x, center.y, center.z, cellsize));
 
@@ -182,7 +178,6 @@ namespace SE.DC
 						// go through 3 far edges of voxel
 						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
 						{
-
 							int ei0 = FarEdges[edgeNum, 0];
 							int ei1 = FarEdges[edgeNum, 1];
 
@@ -217,15 +212,17 @@ namespace SE.DC
 							// edge is maximal
 							// now to generate a quad around the edge
 							// first have to get the 4 vert ids
-							Vector3[] vs = new Vector3[4];
-							Vector3[] ns = new Vector3[4];
+							List<Vector3> vs = new List<Vector3>();
+							List<Vector3> ns = new List<Vector3>();
+							//Vector3[] vs = new Vector3[4];
+							//Vector3[] ns = new Vector3[4];
 
 							Debug.Log("Got here");
 
 							OctreeDrawInfo ogDrawInfo = ogNode.drawInfos[x, y, z];
 
-							vs[0] = ogDrawInfo.position;
-							ns[0] = ogDrawInfo.averageNormal;
+							vs.Add(ogDrawInfo.position);
+							ns.Add(ogDrawInfo.averageNormal);
 
 							MainEdgeCellGizmos.Add(new Vector4(center.x, center.y, center.z, cellsize));
 
@@ -234,6 +231,21 @@ namespace SE.DC
 								new Vector3[] {new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(1, 0, 1)},
 								new Vector3[] {new Vector3(0, 1, 0), new Vector3(1, 0, 0), new Vector3(1, 1, 0)}
 							};
+							// yz -> 011 -> 110 -> 6
+							// xz -> 101 -> 101 -> 5
+							// xy -> 110 -> 011 -> 3
+							byte[] Maxs = {
+								6, 5, 3
+							};
+
+							byte Max = Maxs[edgeNum];
+
+
+							if(seamNodes[Max - 1] == null) {
+								//continue;
+							} 
+
+							bool shouldSkip = false;
 
 							Vector3[] DCOffsets = DCEdgeoffsets[edgeNum];
 							for (int vertNum = 0; vertNum < 3; vertNum++)
@@ -265,30 +277,41 @@ namespace SE.DC
 								center = offset * cellsize + (Vector3.one * cellsize * 0.5f) + ogNode.Position * worldSize + ee * cellsize;
 								//EdgeCellGizmos.Add(new Vector4(center.x, center.y, center.z, cellsize));
 
-								vs[vertNum + 1] = targetChunk.drawInfos[(int)offset.x, (int)offset.y, (int)offset.z].position + ee;
-								ns[vertNum + 1] = targetChunk.drawInfos[(int)offset.x, (int)offset.y, (int)offset.z].averageNormal;
-							}
+								if(targetChunk== null) {
+									shouldSkip = true;
+									continue;
+								}
 
+								Debug.Log("Target chunk: ");
+								Debug.Log(targetChunk);
 
-							int[] tri1 = { 0, 1, 3 };
-							int[] tri2 = { 0, 3, 2 };
-							if (((ogDrawInfo.corners >> ei0) & 1) == 1 != (edgeNum == 1))
-							{ // flip
-								tri1[0] = 1; tri1[1] = 0;
-								tri2[0] = 3; tri2[1] = 0;
+								vs.Add(targetChunk.drawInfos[(int)offset.x, (int)offset.y, (int)offset.z].position + ee);
+								ns.Add(targetChunk.drawInfos[(int)offset.x, (int)offset.y, (int)offset.z].averageNormal);
 							}
+							if(shouldSkip) continue;
 
-							for (int i = 0; i < 3; i++)
-							{
-								vertices.Add(vs[tri1[i]]);
-								normals.Add(ns[tri1[i]]);
-								indices.Add(indices.Count);
-							}
-							for (int i = 0; i < 3; i++)
-							{
-								vertices.Add(vs[tri2[i]]);
-								normals.Add(ns[tri2[i]]);
-								indices.Add(indices.Count);
+							for(int quadNum = 0; quadNum < vs.Count / 4; quadNum++) {
+								int[] tri1 = { 0, 1, 3 };
+								int[] tri2 = { 0, 3, 2 };
+								if (((ogDrawInfo.corners >> ei0) & 1) == 1 != (edgeNum == 1))
+								{ // flip
+									tri1[0] = 1; tri1[1] = 0;
+									tri2[0] = 3; tri2[1] = 0;
+								}
+
+								for (int i = 0; i < 3; i++)
+								{
+									vertices.Add(vs[quadNum * 4 + tri1[i]]);
+									normals.Add(ns[quadNum * 4 + tri1[i]]);
+									indices.Add(indices.Count);
+								}
+								for (int i = 0; i < 3; i++)
+								{
+									vertices.Add(vs[quadNum * 4 + tri2[i]]);
+									normals.Add(ns[quadNum * 4 + tri2[i]]);
+									indices.Add(indices.Count);
+								}
+
 							}
 						}
 					}
@@ -297,7 +320,7 @@ namespace SE.DC
 
 			m.vertices = vertices.ToArray();
 			m.normals = normals.ToArray();
-			m.triangles = indices.ToArray();
+			m.triangles = indices.ToArray();*/
 
 			return m;
 		}
@@ -313,6 +336,184 @@ namespace SE.DC
 			a.z = (int)a.z % resolution;
 
 			return a;
+		}
+
+		public static OctreeNode GenSeamOctree(Chunks.ChunkNode[] octants) {
+			OctreeNode root = new OctreeNode();
+
+			/*
+				new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
+				new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)
+
+				0: 1111 1110  -> 254
+				1: 001 -> 100 -> 1
+				2: 010 -> 010 -> 2
+				3: 011 -> 110 -> 3
+				4: 100 -> 001 -> 4
+				5: 101 -> 101 -> 5
+				6: 110 -> 011 -> 6
+				7: 111 -> 111 -> 7
+			 */
+
+
+			byte[] masks = {254, 3, 5, 7, 
+							9, 11, 13, 15};
+
+			root.min = octants[0].Position;
+			root.size = (int)(octants[0].Size * 64 * 2);
+			root.children = new OctreeNode[8];
+
+			for(int i = 0; i < 8; i++) {
+				Chunks.ChunkNode chunk = octants[i];
+				if(chunk == null) continue;
+				OctreeNode node = new OctreeNode();
+				node.min = chunk.Position;
+				node.fsize = chunk.Size;
+				root.children[i] = node;
+				GenSeamOctreeRecursive(masks[i], node, chunk);
+			}
+			AddOctreeToGizmos(root);
+			return root;
+		}
+
+		public static void GenSeamOctreeRecursive(byte mask, OctreeNode node, Chunks.ChunkNode chunk) {
+			if(chunk.Children == null) {
+				GenChunkSeamOctree(mask, node, chunk);
+				return;
+			}
+
+			Debug.Log("GenSeamRecursive called");
+
+			node.children = new OctreeNode[8];
+
+			for(int i = 0; i < 8; i++) {
+				byte newMask = SatisfiesMask(mask, i);
+				if(newMask == 0) {
+					continue;
+				}
+				Chunks.ChunkNode child = chunk.Children[i];
+				OctreeNode nChild = new OctreeNode();
+				nChild.fmin = child.Position;
+				nChild.fsize = child.Size;
+				node.children[i] = nChild;
+				GenSeamOctreeRecursive(newMask, nChild, child);
+			}
+		}
+
+		public static void GenChunkSeamOctree(byte mask, OctreeNode node, Chunks.ChunkNode chunk) {
+			int res = Chunks.ChunkOctree.RESOLUTION;
+
+			int repsLeft = (int)Mathf.Log(res, 2);
+			Debug.Log("GenChunkSeamOctreeRecursive with mask: " + mask);
+
+			node.cmin = new Vector3Int(0, 0, 0);
+
+			GenChunkSeamOctreeRecursive(mask, node, chunk, repsLeft);
+		}
+	
+		public static void GenChunkSeamOctreeRecursive(byte mask, OctreeNode node, Chunks.ChunkNode chunk, int repsLeft) {
+			if(repsLeft == 0) {
+				// find corresponding drawInfo
+				node.drawInfo = chunk.drawInfos[(int)node.cmin.x, (int)node.cmin.y, (int)node.cmin.z];
+				return;
+			}
+
+			int childSize = node.size / 2;
+
+			for(int i = 0; i < 8; i++) {
+				byte result = SatisfiesMask(mask, i);
+
+				if(result != 0) {
+					OctreeNode child = new OctreeNode();
+					child.subChunk = true;
+					child.fsize = node.fsize / 2;
+					child.size = childSize;
+					child.cmin = node.cmin + (DCC.vioffsets[i] * childSize);
+					child.min = node.min + (DCC.vfoffsets[i] * childSize);
+					child.fmin = node.fmin + (DCC.vfoffsets[i] * child.fsize);
+					child.type = DCC.OctreeNodeType.Node_Internal;
+					child.isovalue = node.isovalue;
+					child.sample = node.sample;
+					node.children[i] = child;
+					GenChunkSeamOctreeRecursive(result, child, chunk, repsLeft - 1);
+				}
+			}
+
+		}
+
+		public static byte SatisfiesMask(byte mask, int octantNum) {
+			if((mask & 1) == 1) {
+				Vector3 ofs = DCC.vfoffsets[octantNum];
+				if(mask == 1) {
+					return octantNum != 0 ? mask : (byte)0;
+				}
+	
+				bool returning = true;
+				if((mask & 2) == 2 && ofs.x != 0) returning = false; 
+				if((mask & 4) == 4 && ofs.y != 0) returning = false; 
+				if((mask & 8) == 8 && ofs.z != 0) returning = false; 
+
+				return returning ? mask : (byte)0;
+			}
+			else {
+				byte[] newMaxMasks = { 0, 170, 204, 238, 240, 250, 252, 254 };
+
+				bool acceptable = ((mask >> octantNum) & 1) == 1;
+
+				//Debug.Log("Acceptable: " + acceptable + ", octantNum: " + octantNum + ", mask: " + mask + ", shifted: " + (mask >> octantNum) + ", new mask: " + newMaxMasks[octantNum]);
+
+				return acceptable ? newMaxMasks[octantNum] : (byte)0;
+
+				//return (byte)(newMaxMasks[octantNum] & mask);
+			}
+		}
+
+			// acceptable octants
+			/*
+				new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
+				new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)
+
+				1 = acceptable octant
+				0 = unacceptable octant
+
+						  7654 3210
+
+				Octant 0: 0000 0000   0
+				Octant 1: 1010 1010   170
+				Octant 2: 1100 1100   204
+				Octant 3: 1110 1110   238
+				Octant 4: 1111 0000   240
+				Octant 5: 1111 1010   250
+				Octant 6: 1111 1100   252
+				Octant 7: 1111 1110   254
+
+			 */
+			
+		public static void AddOctreeToGizmos(OctreeNode node) {
+			if(node == null) { return; }
+
+			for(int i = 0; i < 8; i++) {
+				AddOctreeToGizmos(node.children[i]);
+			}
+
+
+			Vector4 cube;
+
+			float nodesize = node.fsize * 16;
+
+			cube.x = node.min.x * 16 + (nodesize / 2);
+			cube.y = node.min.y * 16 + (nodesize / 2);
+			cube.z = node.min.z * 16 + (nodesize / 2);
+			cube.w = nodesize;
+
+			if(node.subChunk) {
+				Debug.Log("Adding subChunk gizmos");
+				BoundaryCellGizmos.Add(cube);
+			}
+			else {
+				Debug.Log("Adding chunk node gizmos");
+				AllCellGizmos.Add(cube);
+			}
 		}
 
 		public static int earlyContinues;

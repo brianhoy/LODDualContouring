@@ -4,11 +4,6 @@ using UnityEngine;
 namespace SE.DC {
 
 public static class Algorithm {
-	public static readonly Vector3[] CHILD_MIN_OFFSETS = {
-		new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
-		new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)
-	};
-
 	public static OctreeNode ConstructOctreeNodes(OctreeNode node)
 	{
 		if(node == null) return null;
@@ -27,7 +22,7 @@ public static class Algorithm {
 		for(int i = 0; i < 8; i++) {
 			OctreeNode child = new OctreeNode();
 			child.size = childSize;
-			child.min = node.min + (CHILD_MIN_OFFSETS[i] * childSize);
+			child.min = node.min + (DCC.vfoffsets[i] * childSize);
 			child.type = DCC.OctreeNodeType.Node_Internal;
 			child.isovalue = node.isovalue;
 			child.sample = node.sample;
@@ -68,7 +63,7 @@ public static class Algorithm {
 	public static OctreeNode ConstructLeaf(OctreeNode leaf) {
 		int corners = 0;
 		for(int i = 0; i < 8; i++) {
-			Vector3 cornerPos = leaf.min + CHILD_MIN_OFFSETS[i];
+			Vector3 cornerPos = leaf.min + DCC.vfoffsets[i];
 			float density = leaf.sample(cornerPos.x, cornerPos.y, cornerPos.z);
 			int material = density < leaf.isovalue ? DCC.Material_Solid : DCC.Material_Air;
 			corners |= (material << i);
@@ -91,8 +86,8 @@ public static class Algorithm {
 				   continue;
 			}
 
-			Vector3 p1 = leaf.min + CHILD_MIN_OFFSETS[c1];
-			Vector3 p2 = leaf.min + CHILD_MIN_OFFSETS[c2];
+			Vector3 p1 = leaf.min + DCC.vfoffsets[c1];
+			Vector3 p2 = leaf.min + DCC.vfoffsets[c2];
   			Vector3 p = ApproximateZeroCrossingPosition(p1, p2, leaf.sample);
 
 			positions[edgeCount] = p;

@@ -20,11 +20,19 @@ public class Wrapper {
         MaxDepth = maxDepth;
         Resolution = resolution;
         ChunkRoot = Chunks.ChunkOctree.Create(resolution);
+		for(int i = 1; i < 8; i++) {
+			Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[i]);
+			for(int j = 0; j < 8; j++) {
+				Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[i].Children[j]);
+			}
+		}
+		//Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[7].Children[0]);
 		//Chunks.Ops.SplitNode(ChunkRoot, ChunkRoot.RootNode);
 
         MeshLeaves();
+		//MeshSeams();
 
-		GenerateSeamMesh(ChunkRoot.RootNode.Children[3]);
+		GenerateSeamMesh(ChunkRoot.RootNode.Children[0]);
 		//RunTest();
     }
 
@@ -50,17 +58,20 @@ public class Wrapper {
     }
 
     public void DrawGizmos() {
+		//Debug.Log("AllCellGizmos length: " + Algorithm2.AllCellGizmos.Count);
         //Chunks.ChunkOctree.DrawGizmos(ChunkRoot.RootNode, WorldSize);
 		Gizmos.color = Color.green;
+		Debug.Log("Algorithm2.BoundaryCellGizmos length: " + Algorithm2.BoundaryCellGizmos.Count);
 		foreach(Vector4 box in Algorithm2.BoundaryCellGizmos) {
-			//Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
+			//Debug.Log("Drawing BoundaryCellGizmo");
+			Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
 		}
 		Gizmos.color = Color.red;
 		foreach(Vector4 box in Algorithm2.EdgeCellGizmos) {
 			//Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
 		}
 		Gizmos.color = Color.blue;
-		foreach(Vector4 box in Algorithm2.MainEdgeCellGizmos) {
+		foreach(Vector4 box in Algorithm2.AllCellGizmos) {
 			Gizmos.DrawWireCube(new Vector3(box.x, box.y, box.z), Vector3.one * box.w);
 		}
 		Gizmos.color = Color.magenta;
@@ -94,6 +105,14 @@ public class Wrapper {
         MeshedNodes = newLeafNodes;
     }
 
+	public void MeshSeams() {
+        List<Chunks.ChunkNode> newLeafNodes = new List<Chunks.ChunkNode>();
+        PopulateLeafNodeList(ChunkRoot.RootNode, newLeafNodes);
+
+        foreach(Chunks.ChunkNode n in newLeafNodes) {
+            GenerateSeamMesh(n);
+        }
+	}
 
     public void MeshNode(Chunks.ChunkNode node, ref float totalPolyganizeNodeTime, ref float totalAllBeforeTime, System.Diagnostics.Stopwatch sw) {
         sw.Start();
