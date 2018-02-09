@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Util;
 
 public static class UtilFuncs {
-    public static SE.OpenSimplexNoise s = new SE.OpenSimplexNoise(5);
+    public static SE.OpenSimplexNoise s = new SE.OpenSimplexNoise(7);
 
     public delegate float Sampler(float x, float y, float z);
 

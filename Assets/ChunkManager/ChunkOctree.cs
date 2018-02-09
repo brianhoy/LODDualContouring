@@ -172,11 +172,6 @@ public static class ChunkOctree {
         new Vector3(-1, 0, 0), new Vector3(1, 0, 0), 
         new Vector3(0, -1, 0), new Vector3(0, 1, 0), 
         new Vector3(0, 0, -1), new Vector3(0, 0, 1) };
-	public static readonly Vector3[] SeamDirections = {
-        new Vector3(1, 0, 0), new Vector3(0, 1, 0), 
-        new Vector3(1, 1, 0), new Vector3(0, 0, 1), 
-        new Vector3(1, 0, 1), new Vector3(0, 1, 1), 
-		new Vector3(1, 1, 1)};
     public static ChunkNode[] FindNeighbors(Root root, ChunkNode node) {
         ChunkNode[] neighbors = new ChunkNode[6];
         for(int i = 0; i < 6; i++) {
@@ -188,7 +183,7 @@ public static class ChunkOctree {
 	public static ChunkNode[] FindSeamNodes(Root root, ChunkNode node) {
 		ChunkNode[] seamNodes = new ChunkNode[7];
         for(int i = 0; i < 7; i++) {
-            Vector3 dir = ChunkOctree.SeamDirections[i];
+            Vector3 dir = DCC.vfoffsets[i + 1];
             seamNodes[i] = RecursiveGetNeighbor(root, node, dir);
         }
         return seamNodes;
@@ -316,7 +311,12 @@ public static class ChunkOctree {
 		Debug.Assert(node != null && node.IsLeaf);
 
 		ChunkNode[] seamNodes = FindSeamNodes(root, node);
-		Mesh m = Algorithm2.GenSeamMesh(RESOLUTION, node, seamNodes);
+        ChunkNode[] nodes = new ChunkNode[8];
+        nodes[0] = node;
+        for(int i = 1; i < 8; i++) {
+            nodes[i] = seamNodes[i - 1];
+        }
+		Mesh m = Algorithm2.GenSeamMesh(RESOLUTION, nodes);
 
 		return m;
 	}

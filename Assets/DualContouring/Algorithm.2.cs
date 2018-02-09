@@ -127,10 +127,10 @@ namespace SE.DC
 
 		public static int worldSize = 16;
 
-		public static Mesh GenSeamMesh(int resolution, Chunks.ChunkNode ogNode, Chunks.ChunkNode[] seamNodes)
+		public static Mesh GenSeamMesh(int resolution, Chunks.ChunkNode[] nodes)
 		{
-			Debug.Assert(ogNode.IsLeaf);
-			Debug.Log("Seam ogNode: " + ogNode);
+			Debug.Assert(nodes[0].IsLeaf);
+			Debug.Log("Seam ogNode: " + nodes[0]);
 
 			Mesh m = new Mesh();
 
@@ -139,16 +139,10 @@ namespace SE.DC
 			List<Vector3> normals = new List<Vector3>();
 			List<Vector3> vertices = new List<Vector3>();
 			List<int> indices = new List<int>();
-			float nodeSize = ogNode.Size * worldSize;
+			float nodeSize = nodes[0].Size * worldSize;
 			float cellsize = nodeSize / (float)resolution;
 
-			Chunks.ChunkNode[] octants = new Chunks.ChunkNode[8];
-			octants[0] = ogNode;
-			for(int i = 1; i < 8; i++) {
-				octants[i] = seamNodes[i - 1];
-			}
-
-			GenSeamOctree(octants);
+			GenSeamOctree(nodes);
 
 			//iterate through all cells of ogNode
 			/*for (int x = 0; x < resolution; x++)
@@ -404,7 +398,7 @@ namespace SE.DC
 			int res = Chunks.ChunkOctree.RESOLUTION;
 
 			int repsLeft = (int)Mathf.Log(res, 2);
-			Debug.Log("GenChunkSeamOctreeRecursive with mask: " + mask);
+			//Debug.Log("GenChunkSeamOctreeRecursive with mask: " + mask);
 
 			node.cmin = new Vector3Int(0, 0, 0);
 
