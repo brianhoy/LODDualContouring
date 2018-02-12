@@ -21,19 +21,38 @@ namespace SE.DC
 		public static List<Edge> Edges = new List<Edge>();
 
 		static readonly int[,] FarEdges = { { 3, 7 }, { 5, 7 }, { 6, 7 } };
+		static int Resolution = 16;
 
-		public static Mesh Run(int resolution, UtilFuncs.Sampler samp, Chunks.ChunkNode node, float scaleFactor)
+		public static Mesh Run(int resolution, Chunks.ChunkNode cnode, UtilFuncs.Sampler samp, Chunks.ChunkNode node, float scaleFactor)
 		{
+			Resolution = resolution;
+
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 
 			sw.Start();
 			List<Vector3> vertices = new List<Vector3>();
 			List<Vector3> normals = new List<Vector3>();
+			List<int> indices = new List<int>();
 
-			OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, vertices, normals, samp, scaleFactor);
-			Mesh m = GenMesh(resolution, drawInfos, vertices, normals);
+			//OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, vertices, normals, samp, scaleFactor);
+			//Mesh m = GenMesh(resolution, drawInfos, vertices, normals);
 
-			node.drawInfos = drawInfos;
+			OctreeNode root = new OctreeNode();
+			root.size = resolution;
+			root.sample = samp;
+
+			cnode.octree = root;
+
+			Algorithm.ConstructOctreeNodes(root);
+			Algorithm.GenerateVertexIndices(root, vertices, normals);
+			Algorithm.ContourCellProc(root, indices);
+
+			Mesh m = new Mesh();
+			m.SetVertices(vertices);
+			m.SetNormals(normals);
+			m.triangles = indices.ToArray();
+
+			//node.drawInfos = drawInfos;
 
 			sw.Stop();
 			//Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + sw.ElapsedMilliseconds + "ms");
@@ -142,7 +161,10 @@ namespace SE.DC
 			float nodeSize = nodes[0].Size * worldSize;
 			float cellsize = nodeSize / (float)resolution;
 
-			GenSeamOctree(nodes);
+			OctreeNode root = GenSeamOctree(nodes);
+
+			Algorithm.GenerateVertexIndices(root, vertices, normals);
+			Algorithm.ContourCellProc(root, indices);
 
 			//iterate through all cells of ogNode
 			/*for (int x = 0; x < resolution; x++)
@@ -315,7 +337,9 @@ namespace SE.DC
 			m.vertices = vertices.ToArray();
 			m.normals = normals.ToArray();
 			m.triangles = indices.ToArray();*/
-
+			m.vertices = vertices.ToArray();
+			m.normals = normals.ToArray();
+			m.triangles = indices.ToArray();
 			return m;
 		}
 
@@ -350,8 +374,8 @@ namespace SE.DC
 			 */
 
 
-			byte[] masks = {254, 3, 5, 7, 
-							9, 11, 13, 15};
+			byte[] masks = {254, 9, 5, 13, 
+							3, 11, 7, 15};
 
 			root.min = octants[0].Position;
 			root.size = (int)(octants[0].Size * 64 * 2);
@@ -372,7 +396,13 @@ namespace SE.DC
 
 		public static void GenSeamOctreeRecursive(byte mask, OctreeNode node, Chunks.ChunkNode chunk) {
 			if(chunk.Children == null) {
-				GenChunkSeamOctree(mask, node, chunk);
+				node = chunk.octree;
+				Debug.Log("Chunk octree: " + node);
+				for(int i = 0; i < 8 && node.children[i] != null; i++) {
+					node.children[i].subChunk = true;
+				}
+				Debug.Log("Chunk octree children: " + node.children.Length);
+				//GenChunkSeamOctree(mask, node, chunk);
 				return;
 			}
 
@@ -388,6 +418,7 @@ namespace SE.DC
 				Chunks.ChunkNode child = chunk.Children[i];
 				OctreeNode nChild = new OctreeNode();
 				nChild.fmin = child.Position;
+				nChild.min = child.Position;
 				nChild.fsize = child.Size;
 				node.children[i] = nChild;
 				GenSeamOctreeRecursive(newMask, nChild, child);
@@ -401,6 +432,7 @@ namespace SE.DC
 			//Debug.Log("GenChunkSeamOctreeRecursive with mask: " + mask);
 
 			node.cmin = new Vector3Int(0, 0, 0);
+			node.size = Resolution;
 
 			GenChunkSeamOctreeRecursive(mask, node, chunk, repsLeft);
 		}
@@ -408,11 +440,19 @@ namespace SE.DC
 		public static void GenChunkSeamOctreeRecursive(byte mask, OctreeNode node, Chunks.ChunkNode chunk, int repsLeft) {
 			if(repsLeft == 0) {
 				// find corresponding drawInfo
+				node.type = DCC.OctreeNodeType.Node_Leaf;
 				node.drawInfo = chunk.drawInfos[(int)node.cmin.x, (int)node.cmin.y, (int)node.cmin.z];
+
+				//Debug.Log("Trying to retrieve drawInfo at cmin " + node.cmin);
+
+				//Debug.Assert(node.drawInfo != null);
+
 				return;
 			}
 
-			int childSize = node.size / 2;
+
+			float childSize = node.fsize / 2;
+			Debug.Log("Node.size: " + node.size);
 
 			for(int i = 0; i < 8; i++) {
 				byte result = SatisfiesMask(mask, i);
@@ -421,9 +461,10 @@ namespace SE.DC
 					OctreeNode child = new OctreeNode();
 					child.subChunk = true;
 					child.fsize = node.fsize / 2;
-					child.size = childSize;
-					child.cmin = node.cmin + (DCC.vioffsets[i] * childSize);
+					child.size = node.size / 2;
+					child.cmin = node.cmin + DCC.vioffsets[i] * child.size;
 					child.min = node.min + (DCC.vfoffsets[i] * childSize);
+					//Debug.Log("Subchunk child min: " + child.min + ", childSize: " + childSize);
 					child.fmin = node.fmin + (DCC.vfoffsets[i] * child.fsize);
 					child.type = DCC.OctreeNodeType.Node_Internal;
 					child.isovalue = node.isovalue;
@@ -450,7 +491,16 @@ namespace SE.DC
 				return returning ? mask : (byte)0;
 			}
 			else {
-				byte[] newMaxMasks = { 0, 170, 204, 238, 240, 250, 252, 254 };
+				byte[] newMaxMasks = { 0, 
+										170, 
+										204, 
+										252, 
+										240, 
+										250, 
+										238, 
+										254 };
+
+
 
 				bool acceptable = ((mask >> octantNum) & 1) == 1;
 
@@ -485,6 +535,7 @@ namespace SE.DC
 			
 		public static void AddOctreeToGizmos(OctreeNode node) {
 			if(node == null) { return; }
+				//Debug.Log("AddOctreeToGizmos");
 
 			for(int i = 0; i < 8; i++) {
 				AddOctreeToGizmos(node.children[i]);
@@ -495,17 +546,19 @@ namespace SE.DC
 
 			float nodesize = node.fsize * 16;
 
+			//Debug.Log("AddOctreeToGizmos " + node.min);
+
 			cube.x = node.min.x * 16 + (nodesize / 2);
 			cube.y = node.min.y * 16 + (nodesize / 2);
 			cube.z = node.min.z * 16 + (nodesize / 2);
 			cube.w = nodesize;
 
 			if(node.subChunk) {
-				Debug.Log("Adding subChunk gizmos");
+				//Debug.Log("Adding subChunk gizmos");
 				BoundaryCellGizmos.Add(cube);
 			}
 			else {
-				Debug.Log("Adding chunk node gizmos");
+				//Debug.Log("Adding chunk node gizmos");
 				AllCellGizmos.Add(cube);
 			}
 		}

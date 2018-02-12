@@ -22,7 +22,7 @@ public class Wrapper {
         ChunkRoot = Chunks.ChunkOctree.Create(resolution);
 		for(int i = 1; i < 8; i++) {
             //if(i == 7) { continue; }
-			Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[i]);
+			//Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[i]);
 			for(int j = 0; j < 8; j++) {
 				//Chunks.ChunkOctree.SplitNode(ChunkRoot, ChunkRoot.RootNode.Children[i].Children[j]);
 			}

@@ -21,6 +21,16 @@ namespace SE.DC {
         {1,0,0}, {1,0,1}, {1,1,0}, {1,1,1} 
 	};
 
+	/*
+	
+	-	public static readonly Vector3[] SeamDirections = {	
+-        new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1), 
+		 new Vector3(1, 0, 0),new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)};
+		Swap 1 and 4
+		Swap 3 and 6
+
+	 */
+
     public static Vector3[] vfoffsets = {
 		new Vector3(0, 0, 0), new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1),
 		new Vector3(1, 0, 0), new Vector3(1, 0, 1), new Vector3(1, 1, 0), new Vector3(1, 1, 1)

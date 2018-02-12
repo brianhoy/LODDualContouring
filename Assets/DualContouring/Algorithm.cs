@@ -167,6 +167,10 @@ public static class Algorithm {
 		}
 		else {
 			OctreeDrawInfo d = node.drawInfo;
+			//Debug.Log("Generating vertix indices... d: ");
+			//Debug.Log(d);
+			if(d == null) return;
+
 			d.index = vertices.Count;
 			vertices.Add(d.position);
 			normals.Add(d.averageNormal);
@@ -183,6 +187,8 @@ public static class Algorithm {
             int edge = DCC.processEdgeMask[dir][i];
             int c1 = DCC.edgevmap[edge][0];
             int c2 = DCC.edgevmap[edge][1];
+
+			if(nodes[i].drawInfo == null) continue;
 
             int m1 = (nodes[i].drawInfo.corners >> c1) & 1;
             int m2 = (nodes[i].drawInfo.corners >> c2) & 1;

@@ -288,7 +288,7 @@ public static class ChunkOctree {
 
 		UtilFuncs.Sampler samp = (float x, float y, float z) => UtilFuncs.Sample((x * factor + node.Position.x)  * WorldSize, (y * factor + node.Position.y) * WorldSize, (z * factor + node.Position.z) * WorldSize);
 
-		Mesh m = Algorithm2.Run(RESOLUTION, samp, node, 1f);
+		Mesh m = Algorithm2.Run(RESOLUTION, node, samp, node, 1f);
 		//Debug.Log("Got here");
 
         /*ExtractionInput input = new ExtractionInput();
