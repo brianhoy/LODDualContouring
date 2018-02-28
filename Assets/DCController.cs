@@ -7,29 +7,34 @@ public class DCController : MonoBehaviour {
 	public GameObject ChunkPrefab;
 	public GameObject Camera;
 
-	public float WorldSize = 64f;
+	public int LODs = 2;
+	public float MinimumChunkSize = 16f;
 	public int MaxDepth = 4;
-	public int Resolution = 32;
+	public int Resolution = 16;
+	public int Radius = 5;
 
-	SE.DC.Wrapper wrapper;
+	Chunks.ChunkQueuer queuer;
 
 	// Use this for initialization
 	void Start () {
 		//Util.ExtractionResult res = SE.DC.Algorithm.Run(32, 0, UtilFuncs.Sample, false);
 
-		wrapper = new SE.DC.Wrapper(this.GetComponent<Transform>(), ChunkPrefab, WorldSize, MaxDepth, Resolution);
+		queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
 	}
 	
 
 
 	// Update is called once per frame
 	void Update () {
+		if(Input.GetKeyDown(KeyCode.U)) {
+			queuer.Update();
+		}
 		//wrapper.Update(Camera.GetComponent<Transform>().position);
 	}
 
 	void OnDrawGizmos() {
-		if(wrapper != null) {
-			wrapper.DrawGizmos();
+		if(queuer != null) {
+			queuer.DrawGizmos();
 		}
 	}
 }

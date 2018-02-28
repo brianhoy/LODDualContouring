@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Collections;
 using UnityEngine;
 
@@ -23,8 +24,9 @@ namespace SE.DC
 		static readonly int[,] FarEdges = { { 3, 7 }, { 5, 7 }, { 6, 7 } };
 		static int Resolution = 16;
 
-		public static Mesh Run(int resolution, Chunks.ChunkNode cnode, UtilFuncs.Sampler samp, Chunks.ChunkNode node, float scaleFactor)
+		public static void Run(int resolution, UtilFuncs.Sampler samp, float scaleFactor, Chunks.Chunk chunk, ConcurrentQueue<Chunks.Chunk> chunksToUpload)
 		{
+			chunk.State = Chunks.ChunkState.Meshing;
 			Resolution = resolution;
 
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
@@ -32,32 +34,20 @@ namespace SE.DC
 			sw.Start();
 			List<Vector3> vertices = new List<Vector3>();
 			List<Vector3> normals = new List<Vector3>();
-			List<int> indices = new List<int>();
+			List<int> indices;
 
-			//OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, vertices, normals, samp, scaleFactor);
-			//Mesh m = GenMesh(resolution, drawInfos, vertices, normals);
+			OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, vertices, normals, samp, scaleFactor);
+			indices = GenIndices(resolution, drawInfos, vertices, normals);
 
-			OctreeNode root = new OctreeNode();
-			root.size = resolution;
-			root.sample = samp;
+			chunk.Vertices = vertices.ToArray();
+			chunk.Triangles = indices.ToArray();
+			chunk.Normals = normals.ToArray();
+			chunk.State = Chunks.ChunkState.Blank;
 
-			cnode.octree = root;
-
-			Algorithm.ConstructOctreeNodes(root);
-			Algorithm.GenerateVertexIndices(root, vertices, normals);
-			Algorithm.ContourCellProc(root, indices);
-
-			Mesh m = new Mesh();
-			m.SetVertices(vertices);
-			m.SetNormals(normals);
-			m.triangles = indices.ToArray();
-
-			//node.drawInfos = drawInfos;
+			chunksToUpload.Enqueue(chunk);
 
 			sw.Stop();
-			//Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + sw.ElapsedMilliseconds + "ms");
-
-			return m;
+			Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + sw.ElapsedMilliseconds + "ms");
 		}
 
 		public static OctreeDrawInfo[,,] GenVertices(int resolution, List<Vector3> vertices, List<Vector3> normals, UtilFuncs.Sampler samp, float scaleFactor)
@@ -146,7 +136,7 @@ namespace SE.DC
 
 		public static int worldSize = 16;
 
-		public static Mesh GenSeamMesh(int resolution, Chunks.ChunkNode[] nodes)
+		/*public static Mesh GenSeamMesh(int resolution, Chunks.ChunkNode[] nodes)
 		{
 			Debug.Assert(nodes[0].IsLeaf);
 			Debug.Log("Seam ogNode: " + nodes[0]);
@@ -336,7 +326,7 @@ namespace SE.DC
 
 			m.vertices = vertices.ToArray();
 			m.normals = normals.ToArray();
-			m.triangles = indices.ToArray();*/
+			m.triangles = indices.ToArray();/
 			m.vertices = vertices.ToArray();
 			m.normals = normals.ToArray();
 			m.triangles = indices.ToArray();
@@ -371,7 +361,7 @@ namespace SE.DC
 				5: 101 -> 101 -> 5
 				6: 110 -> 011 -> 6
 				7: 111 -> 111 -> 7
-			 */
+			 /
 
 
 			byte[] masks = {254, 9, 5, 13, 
@@ -474,7 +464,7 @@ namespace SE.DC
 				}
 			}
 
-		}
+		} */
 
 		public static byte SatisfiesMask(byte mask, int octantNum) {
 			if((mask & 1) == 1) {
@@ -567,7 +557,7 @@ namespace SE.DC
 		public static int lateContinues;
 		public static int latelateContinues;
 
-		public static Mesh GenMesh(int resolution, OctreeDrawInfo[,,] drawInfos, List<Vector3> vertices, List<Vector3> normals)
+		public static List<int> GenIndices(int resolution, OctreeDrawInfo[,,] drawInfos, List<Vector3> vertices, List<Vector3> normals)
 		{
 			List<int> indices = new List<int>();
 
@@ -642,163 +632,11 @@ namespace SE.DC
 								indices.Add(t2[i]);
 							}
 						}
-
-
-						// DUMB CODE
-						/*Debug.Log("P: " + p);
-
-						int v0 = drawInfo.index;
-						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
-						{
-							int ei0 = FarEdges[edgeNum, 0];
-							int ei1 = FarEdges[edgeNum, 1];
-
-							//Vector3 offset1 = 
-
-							if (p.x + 1 >= resolution || p.y + 1 >= resolution || p.z + 1 >= resolution)
-							{
-								latelateContinues++;
-								//continue;
-							}
-
-
-							Vector3[] vs = new Vector3[4];
-							Vector3[] ns = new Vector3[4];
-
-							Debug.Log("Got here");
-
-							OctreeDrawInfo ogDrawInfo = drawInfo;
-
-							vs[0] = ogDrawInfo.position;
-							ns[0] = ogDrawInfo.averageNormal;
-
-							Vector3[][] DCEdgeoffsets = {
-								new Vector3[] {new Vector3(0, 0, 1), new Vector3(0, 1, 0), new Vector3(0, 1, 1)},
-								new Vector3[] {new Vector3(0, 0, 1), new Vector3(1, 0, 0), new Vector3(1, 0, 1)},
-								new Vector3[] {new Vector3(0, 1, 0), new Vector3(1, 0, 0), new Vector3(1, 1, 0)}
-							};
-
-							bool skip = false;
-
-							Vector3[] DCOffsets = DCEdgeoffsets[edgeNum];
-							for (int vertNum = 0; vertNum < 3; vertNum++)
-							{
-								Debug.Log("VertNum: " + vertNum);
-								Debug.Log("P: " + p);
-								Vector3 pos = DCOffsets[vertNum] + p;
-								Debug.Log("Pos: " + pos);
-
-								if ( (pos.x >= resolution) || 
-									 (pos.y >= resolution) || 
-									 (pos.z >= resolution) ||
-									 (drawInfos[(int)pos.x, (int)pos.y, (int)pos.z] == null)) {
-									skip = true;
-									continue;
-								}
-
-
-								vs[vertNum + 1] = drawInfos[(int)pos.x, (int)pos.y, (int)pos.z].position;
-								ns[vertNum + 1] = drawInfos[(int)pos.x, (int)pos.y, (int)pos.z].averageNormal;
-							}
-
-							if(skip) {
-								continue;
-							}
-
-							int[] tri1 = { 0, 1, 3 };
-							int[] tri2 = { 0, 3, 2 };
-							if (((ogDrawInfo.corners >> ei0) & 1) == 1 != (edgeNum == 1))
-							{ // flip
-								tri1[0] = 1; tri1[1] = 0;
-								tri2[0] = 3; tri2[1] = 0;
-							}
-
-							for (int i = 0; i < 3; i++)
-							{
-								vertices.Add(vs[tri1[i]]);
-								normals.Add(ns[tri1[i]]);
-								indices.Add(indices.Count);
-							}
-							for (int i = 0; i < 3; i++)
-							{
-								vertices.Add(vs[tri2[i]]);
-								normals.Add(ns[tri2[i]]);
-								indices.Add(indices.Count);
-							}
-						}*/
-
-						/*int v0 = drawInfo.index;
-						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
-						{
-							if (p.x + 1 >= resolution || p.y + 1 >= resolution || p.z + 1 >= resolution)
-							{
-								latelateContinues++;
-								continue;
-							}
-
-							int ei0 = FarEdges[edgeNum, 0];
-							int ei1 = FarEdges[edgeNum, 1];
-
-							bool edge1 = (caseCode & (1 << ei0)) == (1 << ei0);
-							bool edge2 = (caseCode & (1 << ei1)) == (1 << ei1);
-
-							if (edge1 == edge2)
-							{
-								lateContinues++;
-								continue;
-							}
-
-							int v1, v2, v3;
-
-							if (edgeNum == 0)
-							{
-								v1 = drawInfos[(int)p.x, (int)p.y, (int)p.z + 1].index;
-								v2 = drawInfos[(int)p.x, (int)p.y + 1, (int)p.z].index;
-								v3 = drawInfos[(int)p.x, (int)p.y + 1, (int)p.z + 1].index;
-							}
-							else if (edgeNum == 1)
-							{
-								v1 = drawInfos[(int)p.x, (int)p.y, (int)p.z + 1].index;
-								v2 = drawInfos[(int)p.x + 1, (int)p.y, (int)p.z].index;
-								v3 = drawInfos[(int)p.x + 1, (int)p.y, (int)p.z + 1].index;
-							}
-							else
-							{
-								v1 = drawInfos[(int)p.x, (int)p.y + 1, (int)p.z].index;
-								v2 = drawInfos[(int)p.x + 1, (int)p.y, (int)p.z].index;
-								v3 = drawInfos[(int)p.x + 1, (int)p.y + 1, (int)p.z].index;
-							}
-
-							int[] t1 = { v0, v1, v3 };
-							int[] t2 = { v0, v3, v2 };
-
-							if (((caseCode >> ei0) & 1) == 1 != (edgeNum == 1))
-							{ // flip
-								t1[0] = v1; t1[1] = v0;
-								t2[0] = v3; t2[1] = v0;
-							}
-							for (int i = 0; i < 3; i++)
-							{
-								indices.Add(t1[i]);
-							}
-							for(int i = 0; i < 3; i++) {
-								indices.Add(t2[i]);
-							}
-						}*/
 					}
 				}
 			}
 
-			//Debug.Log("Early continues: " + earlyContinues);
-			//Debug.Log("Late continues: " + lateContinues);
-			//Debug.Log("Latelate continues: " + latelateContinues);
-
-			Mesh m = new Mesh();
-			m.vertices = vertices.ToArray();
-			m.triangles = indices.ToArray();
-			m.normals = normals.ToArray();
-			return m;
-
+			return indices;
 		}
 
 		public static Vector3 Lerp(float density1, float density2, float x1, float y1, float z1, float x2, float y2, float z2)
