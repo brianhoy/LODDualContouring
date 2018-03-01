@@ -27,8 +27,9 @@ public class DCController : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		if(Input.GetKeyDown(KeyCode.U)) {
-			queuer.Update();
+			
 		}
+		queuer.Update();
 		//wrapper.Update(Camera.GetComponent<Transform>().position);
 	}
 

@@ -64,7 +64,7 @@ public class ChunkQueuer {
 
 		float mc2 = MinimumChunkSize * 2;
 
-		Debug.Log("Updating. #LODs: " + LODs);
+		//Debug.Log("Updating. #LODs: " + LODs);
 
 		Hashtable chunkLocations = new Hashtable();
 		for(int LOD = 1; LOD <= LODs; LOD++) {
@@ -72,18 +72,19 @@ public class ChunkQueuer {
 				for(int y = -Radius; y < Radius; y += 1) {
 					for(int z = -Radius; z < Radius; z += 1) {
 						int scale = (int)Mathf.Pow(2, LOD);
+						int snapSize = (int)MinimumChunkSize * scale * 2;
 						int tfAmount = 0;
 						if(LOD != 1) {
 							//tfAmount = (int)Mathf.Pow(2, LOD - 2) * (int)MinimumChunkSize;
 						}
 						if(LOD == 2) {
-							tfAmount = (int)MinimumChunkSize * 2;
+							//tfAmount = (int)MinimumChunkSize * 2;
 						}
 						if(LOD == 3) {
-							tfAmount = -(int)MinimumChunkSize * 2;
+							//tfAmount = -(int)MinimumChunkSize * 2;
 						}
 						if(LOD == 4) {
-							tfAmount = (int)MinimumChunkSize * 6;
+							//tfAmount = (int)MinimumChunkSize * 6;
 						}
 
 						Vector3 localCoords = (MinimumChunkSize * scale * new Vector3(x, y, z)) - (Vector3.one * tfAmount);
@@ -93,7 +94,7 @@ public class ChunkQueuer {
 						}
 						chunkLocations.Add(localCoords, localCoords);
 
-						Vector3 cpos = new Vector3((int)((pos.x)/mc2)*mc2, (int)((pos.y)/mc2)*mc2, (int)((pos.z)/mc2)*mc2) + localCoords;
+						Vector3 cpos = new Vector3((int)((pos.x)/snapSize)*snapSize, (int)((pos.y)/snapSize)*snapSize, (int)((pos.z)/snapSize)*snapSize) + localCoords;
 
 						string key = "Chunk_"+cpos.x+","+cpos.y+","+cpos.z+"_"+LOD;
 
@@ -122,7 +123,7 @@ public class ChunkQueuer {
 
 		foreach(Chunk chunk in Chunks.Values) {
 			if(chunk.CreationTime != updateTime) {
-				Debug.Log("Deleting chunk at " + chunk.Position);
+				//Debug.Log("Deleting chunk at " + chunk.Position);
 				if(chunk.UnityObject != null) {
 					UnityEngine.Object.Destroy(chunk.UnityObject);
 				}
