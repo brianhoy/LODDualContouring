@@ -8,6 +8,8 @@ public class OctreeDrawInfo
 	public int index;
 	public int corners;
 	public Vector3 position;
+	public Vector3 lod1Position;
+	public Vector3 lod1Normal;
 	public Vector3 averageNormal;
 	public QEF.QEFSolver qef;
 

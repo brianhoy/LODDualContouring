@@ -8,7 +8,7 @@ public class DCController : MonoBehaviour {
 	public GameObject Camera;
 
 	public int LODs = 2;
-	public float MinimumChunkSize = 16f;
+	public int MinimumChunkSize = 16;
 	public int MaxDepth = 4;
 	public int Resolution = 16;
 	public int Radius = 5;

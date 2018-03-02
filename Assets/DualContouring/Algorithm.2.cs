@@ -24,8 +24,9 @@ namespace SE.DC
 		static readonly int[,] FarEdges = { { 3, 7 }, { 5, 7 }, { 6, 7 } };
 		static int Resolution = 16;
 
-		public static void Run(int resolution, UtilFuncs.Sampler samp, float scaleFactor, Chunks.Chunk chunk, ConcurrentQueue<Chunks.Chunk> chunksToUpload)
+		public static void Run(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk)
 		{
+			resolution += 1;
 			chunk.State = Chunks.ChunkState.Meshing;
 			Resolution = resolution;
 
@@ -34,23 +35,26 @@ namespace SE.DC
 			sw.Start();
 			List<Vector3> vertices = new List<Vector3>();
 			List<Vector3> normals = new List<Vector3>();
-			List<int> indices;
+			List<Vector3> lod1vertices = new List<Vector3>();
+			List<Vector3> lod1normals = new List<Vector3>();
+			List<int> indices = new List<int>();
 
-			OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, vertices, normals, samp, scaleFactor);
-			indices = GenIndices(resolution, drawInfos, vertices, normals);
+			OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, samp);
+			GenVerticesLOD1(resolution, drawInfos, samp);
+			GenIndices(resolution, drawInfos, indices, vertices, normals, lod1vertices, lod1normals);
 
-			chunk.Vertices = vertices.ToArray();
+			chunk.Vertices = vertices;
 			chunk.Triangles = indices.ToArray();
-			chunk.Normals = normals.ToArray();
+			chunk.Normals = normals;
+			chunk.LOD1Vertices = lod1vertices;
+			chunk.LOD1Normals = lod1normals;
 			chunk.State = Chunks.ChunkState.Blank;
-
-			chunksToUpload.Enqueue(chunk);
 
 			sw.Stop();
 			Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + sw.ElapsedMilliseconds + "ms");
 		}
 
-		public static OctreeDrawInfo[,,] GenVertices(int resolution, List<Vector3> vertices, List<Vector3> normals, UtilFuncs.Sampler samp, float scaleFactor)
+		public static OctreeDrawInfo[,,] GenVertices(int resolution, UtilFuncs.Sampler samp)
 		{
 			int[,,] vIds = new int[resolution, resolution, resolution];
 
@@ -107,24 +111,24 @@ namespace SE.DC
 							qef.Add(cpositions[i], cnormals[i]);
 						}
 						drawInfo.position = qef.Solve(0.0001f, 4, 0.0001f);
-						drawInfo.index = vertices.Count;
+						//drawInfo.index = vertices.Count;
 
 						Vector3 max = new Vector3(x, y, z) + Vector3.one;
 						if (drawInfo.position.x < x || drawInfo.position.x > max.x ||
 							drawInfo.position.y < y || drawInfo.position.y > max.y ||
 							drawInfo.position.z < z || drawInfo.position.z > max.z)
 						{
-							drawInfo.position = drawInfo.qef.MassPoint * scaleFactor;
+							drawInfo.position = drawInfo.qef.MassPoint;
 						}
 
-						vertices.Add(drawInfo.position * scaleFactor);
+						//vertices.Add(drawInfo.position);
 
 						for (int i = 0; i < edgeCount; i++)
 						{
 							drawInfo.averageNormal += cnormals[i];
 						}
 						drawInfo.averageNormal = Vector3.Normalize(drawInfo.averageNormal); //CalculateSurfaceNormal(drawInfo.position, samp);
-						normals.Add(drawInfo.averageNormal);
+						//normals.Add(drawInfo.averageNormal);
 						drawInfo.corners = caseCode;
 						drawInfos[x, y, z] = drawInfo;
 					}
@@ -132,6 +136,82 @@ namespace SE.DC
 			}
 
 			return drawInfos;
+		}
+
+		public static void GenVerticesLOD1(int resolution, OctreeDrawInfo[,,] drawInfos, UtilFuncs.Sampler samp) {
+			for(int x = 0; x < resolution; x += 2) {
+				for(int y = 0; y < resolution; y += 2) {
+					for(int z = 0; z < resolution; z += 2) {
+						Vector3 p = new Vector3(x, y, z);
+						byte caseCode = 0;
+						sbyte[] densities = new sbyte[8];
+
+						for (int i = 0; i < 8; i++)
+						{
+							Vector3 pos = new Vector3(x, y, z) + DCC.vfoffsets[i] * 2;
+							densities[i] = (sbyte)Mathf.Clamp((samp(pos.x, pos.y, pos.z) * 127f), -127f, 127f); //data[index + inArray[i]];
+
+							if (densities[i] < 0) { caseCode |= (byte)(1 << i); }
+						}
+
+						Vector3[] cpositions = new Vector3[4];
+						Vector3[] cnormals = new Vector3[4];
+						int edgeCount = 0;
+						for (int i = 0; i < 12 && edgeCount < 4; i++)
+						{
+							byte c1 = (byte)DCC.edgevmap[i][0];
+							byte c2 = (byte)DCC.edgevmap[i][1];
+
+							Vector3 p1 = new Vector3(x, y, z) + DCC.vfoffsets[c1] * 2;
+							Vector3 p2 = new Vector3(x, y, z) + DCC.vfoffsets[c2] * 2;
+
+							bool m1 = ((caseCode >> c1) & 1) == 1;
+							bool m2 = ((caseCode >> c2) & 1) == 1;
+
+
+							if (m1 != m2)
+							{
+								cpositions[edgeCount] = ApproximateZeroCrossingPosition(p1, p2, samp);
+								cnormals[edgeCount] = CalculateSurfaceNormal(cpositions[edgeCount], samp);
+								edgeCount++;
+							}
+						}
+
+						if (edgeCount == 0) continue;
+
+						QEF.QEFSolver qef = new QEF.QEFSolver();
+						for (int i = 0; i < edgeCount; i++)
+						{
+							qef.Add(cpositions[i], cnormals[i]);
+						}
+						Vector3 lod1position = qef.Solve(0.0001f, 4, 0.0001f);
+						Vector3 lod1normal = Vector3.zero;
+
+						Vector3 max = new Vector3(x, y, z) + Vector3.one;
+						if (lod1position.x < x || lod1position.x > max.x ||
+							lod1position.y < y || lod1position.y > max.y ||
+							lod1position.z < z || lod1position.z > max.z)
+						{
+							lod1position = qef.MassPoint;
+						}
+
+						for (int i = 0; i < edgeCount; i++)
+						{
+							lod1normal += cnormals[i];
+						}
+						lod1normal = Vector3.Normalize(lod1normal); //CalculateSurfaceNormal(drawInfo.position, samp);
+
+						for (int i = 0; i < 8; i++) {
+							Vector3 pos = DCC.vfoffsets[i] + p;
+							if(pos.x < resolution && pos.y < resolution && pos.z < resolution && drawInfos[(int)pos.x, (int)pos.y, (int)pos.z] != null) {
+								OctreeDrawInfo info = drawInfos[(int)pos.x, (int)pos.y, (int)pos.z];
+								info.lod1Normal = lod1normal;
+								info.lod1Position = lod1position;
+							}
+						}
+					}
+				}
+			}
 		}
 
 		public static int worldSize = 16;
@@ -557,16 +637,18 @@ namespace SE.DC
 		public static int lateContinues;
 		public static int latelateContinues;
 
-		public static List<int> GenIndices(int resolution, OctreeDrawInfo[,,] drawInfos, List<Vector3> vertices, List<Vector3> normals)
+		public static void GenIndices(int resolution, OctreeDrawInfo[,,] drawInfos, List<int> indices, List<Vector3> vertices, List<Vector3> normals, List<Vector3> lod1vertices, List<Vector3> lod1normals)
 		{
-			List<int> indices = new List<int>();
-
 			for (int x = 0; x < resolution; x++)
 			{
 				for (int y = 0; y < resolution; y++)
 				{
 					for (int z = 0; z < resolution; z++)
 					{
+						if(x == resolution - 1 || y == resolution - 1 || z == resolution - 1) {
+							continue;
+						}
+
 						OctreeDrawInfo drawInfo = drawInfos[x, y, z];
 						if (drawInfo == null)
 						{
@@ -589,6 +671,10 @@ namespace SE.DC
 						// DUMB CODE #2 (revised)
 						int[] vs = new int[4];
 						vs[0] = drawInfo.index;
+
+						OctreeDrawInfo[] infos = new OctreeDrawInfo[4];
+						infos[0] = drawInfo;
+
 						//int v0 = drawInfo.index;
 						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
 						{
@@ -613,11 +699,14 @@ namespace SE.DC
 							}
 
 							for(int v = 0; v < 3; v++) {
-								vs[v + 1] = drawInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z].index;
+								//vs[v + 1] = drawInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z].index;
+								infos[v + 1] = drawInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z];
 							}
 
 							int[] t1 = { vs[0], vs[1], vs[3] };
 							int[] t2 = { vs[0], vs[3], vs[2] };
+							OctreeDrawInfo[] i1 = { infos[0], infos[1], infos[3] };
+							OctreeDrawInfo[] i2 = { infos[0], infos[3], infos[2] };
 
 							if (((caseCode >> ei0) & 1) == 1 != (edgeNum == 1))
 							{ // flip
@@ -626,17 +715,26 @@ namespace SE.DC
 							} 
 							for (int i = 0; i < 3; i++)
 							{
-								indices.Add(t1[i]);
+								indices.Add(vertices.Count);
+								vertices.Add(i1[i].position);
+								normals.Add(i1[i].averageNormal);
+								lod1vertices.Add(i1[i].lod1Position);
+								lod1normals.Add(i1[i].lod1Normal);
+								//indices.Add(t1[i]);
 							}
 							for(int i = 0; i < 3; i++) {
-								indices.Add(t2[i]);
+								indices.Add(vertices.Count);
+								vertices.Add(i2[i].position);
+								normals.Add(i2[i].averageNormal);
+								lod1vertices.Add(i2[i].lod1Position);
+								lod1normals.Add(i2[i].lod1Normal);
+
+								//indices.Add(t2[i]);
 							}
 						}
 					}
 				}
 			}
-
-			return indices;
 		}
 
 		public static Vector3 Lerp(float density1, float density2, float x1, float y1, float z1, float x2, float y2, float z2)

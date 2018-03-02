@@ -61,13 +61,15 @@
      <Compile Include="Assets\DualContouring\QEF\QEF.cs" />
      <Compile Include="Assets\DualContouring\QEF\SMat3.cs" />
      <Compile Include="Assets\DualContouring\QEF\SVD.cs" />
+     <Compile Include="Assets\Utility\Console\Console.cs" />
      <Compile Include="Assets\Utility\DoublePrecision\Mathd.cs" />
      <Compile Include="Assets\Utility\DoublePrecision\Vector2d.cs" />
      <Compile Include="Assets\Utility\DoublePrecision\Vector3d.cs" />
+     <Compile Include="Assets\Utility\GhostFreeRoamCamera\Scripts\GhostFreeRoamCamera.cs" />
      <Compile Include="Assets\Utility\Misc.cs" />
-     <Compile Include="Assets\Utility\Perlin.cs" />
-     <Compile Include="Assets\Utility\Simplex.cs" />
-     <Compile Include="Assets\Utility\UVGenerator.cs" />
+     <Compile Include="Assets\Utility\Noise\Perlin.cs" />
+     <Compile Include="Assets\Utility\Noise\Simplex.cs" />
+     <None Include="Assets\Materials\Shaders\Terrain.shader" />
  <Reference Include="UnityEngine.UI">
  <HintPath>C:/Program Files/Unity/Editor/Data/UnityExtensions/Unity/GUISystem/UnityEngine.UI.dll</HintPath>
  </Reference>
