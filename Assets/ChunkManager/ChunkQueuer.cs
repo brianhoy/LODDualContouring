@@ -26,12 +26,13 @@ public class Chunk {
 }
 
 public class ChunkQueuer {
-	private ConcurrentQueue<Chunk> ChunksToMesh;
-	private ConcurrentQueue<Chunk> ChunksToUpload;
+	private ConcurrentBag<Chunk> ChunksToMesh;
+	private ConcurrentBag<Chunk> ChunksToUpload;
 	private Hashtable Chunks;
 	private Transform Viewer;
 	private Transform Parent;
 	private GameObject ChunkPrefab;
+	private CObjectPool<GameObject> UnityObjectPool;
 
 	private int LODs;
 	private int Resolution;
@@ -55,8 +56,14 @@ public class ChunkQueuer {
 
 		LODBounds = new Bounds[4];
 
-		ChunksToMesh = new ConcurrentQueue<Chunk>();
-		ChunksToUpload = new ConcurrentQueue<Chunk>();
+		UnityObjectPool = new CObjectPool<GameObject>(() => {
+			
+			var obj = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+			obj.GetComponent<MeshFilter>().mesh = new Mesh();
+			return obj;
+		});
+		ChunksToMesh = new ConcurrentBag<Chunk>();
+		ChunksToUpload = new ConcurrentBag<Chunk>();
 		Chunks = new Hashtable();
 
 		AddCommands();
@@ -75,15 +82,16 @@ public class ChunkQueuer {
 
 		for(int LOD = 0; LOD < LODs; LOD++) {
 			int scale = (int)Mathf.Pow(2, LOD);
-			int chunkSize = (int)MinimumChunkSize * scale;
+			int chunkSize = MinimumChunkSize * scale;
 			int snapSize = chunkSize * 2;
 
 			Vector3Int minExtents = Vector3Int.zero;
 			Vector3Int maxExtents = Vector3Int.zero;
 
-			Vector3Int snappedViewerPosition = new Vector3Int((int)((pos.x)/snapSize)*snapSize, 
-											(int)((pos.y)/snapSize)*snapSize, 
-											(int)((pos.z)/snapSize)*snapSize);
+			Vector3Int snappedViewerPosition = new Vector3Int(
+											(int)Mathf.Floor((pos.x)/snapSize)*snapSize, 
+											(int)Mathf.Floor((pos.y)/snapSize)*snapSize, 
+											(int)Mathf.Floor((pos.z)/snapSize)*snapSize);
 
 			if(LOD == 0) {
 				if(Initialized && snappedViewerPosition == PreviousPosition) {
@@ -96,28 +104,26 @@ public class ChunkQueuer {
 				for(int y = minCoord; y < maxCoord; y++) {
 					for(int z = minCoord; z < maxCoord; z++) {
 						Vector3Int localCoords = new Vector3Int(x, y, z) * chunkSize - Vector3Int.one * chunkSize;
+						Vector3Int cpos = snappedViewerPosition + localCoords;
 						if(x == minCoord && y == minCoord && z == minCoord) {
-							minExtents = localCoords;
+							minExtents = cpos;
 						}
-						if(x == maxCoord && y == maxCoord && z == maxCoord) {
-							maxExtents = localCoords;
+						if(x == maxCoord - 1 && y == maxCoord - 1 && z == maxCoord - 1) {
+							maxExtents = cpos;
 						}
 
 
-						if(LOD != 0 && previousLodBounds.Contains(localCoords)) {
+						if(LOD != 0 && previousLodBounds.Contains(cpos)) {
+							//Debug.Log("Continuing because previous lod bounds contains point. ");
 							continue;
 						}
+						Vector4 key = new Vector4(cpos.x, cpos.y, cpos.z, LOD);
 
-							
-						Vector3Int cpos = snappedViewerPosition + localCoords;
+						//Debug.Log("Key: " + key);
 
-						Vector3 key = new Vector3(cpos.x, cpos.y, cpos.z); //getChunkHash(cpos, LOD);
-
-						Debug.Log("Key: " + key);
-
-						if(Chunks.ContainsKey(key) && (Chunks[key] as Chunk).LOD <= LOD) {
-							//Debug.Log("skipping b/c contained key " + key);
-							(Chunks[key] as Chunk).CreationTime = updateTime;
+						if(Chunks.ContainsKey(key)) {
+							var chunk = (Chunks[key] as Chunk);
+							chunk.CreationTime = updateTime;
 						}
 						else {
 							Chunk chunk = new Chunk();
@@ -129,24 +135,20 @@ public class ChunkQueuer {
 							chunk.CreationTime = updateTime;
 							chunk.State = ChunkState.Blank;
 							Chunks.Add(key, chunk);
-							ChunksToMesh.Enqueue(chunk);
+							ChunksToMesh.Add(chunk);
 						}
 					}
 				}
 			}
 
 			Vector3Int size = maxExtents - minExtents;
-			previousLodBounds = new BoundsInt(minExtents.x, minExtents.y, minExtents.z, size.x, size.y, size.z);
-
+			previousLodBounds = new BoundsInt(minExtents, size);
 		}
-
+ 
 		long ElapsedMilliseconds1 = sw.ElapsedMilliseconds;
 		sw.Restart();
 
-
-		if(numChunksAdded > 0) {
-			Debug.Log("Added " + numChunksAdded + " chunks.");
-		}
+		Debug.Log("Added " + numChunksAdded + " chunks.");
 
 		Hashtable newChunkTable = new Hashtable();
 		foreach(Chunk chunk in Chunks.Values) {
@@ -156,14 +158,16 @@ public class ChunkQueuer {
 			else {
 				//Debug.Log("Deleting chunk at " + chunk.Position);
 				if(chunk.UnityObject != null) {
-					UnityEngine.Object.Destroy(chunk.UnityObject);
+					UnityObjectPool.PutObject(ref chunk.UnityObject);
+					chunk.UnityObject.GetComponent<MeshFilter>().mesh.Clear();
+					//UnityEngine.Object.Destroy(chunk.UnityObject);
 				}
 				chunk.State = ChunkState.Cancelled;
 			}
 		}
 		Chunks = newChunkTable;
-		long ElapsedMilliseconds2 = sw.ElapsedMilliseconds;
 
+		long ElapsedMilliseconds2 = sw.ElapsedMilliseconds;
 		string msg = "Chunk Coordinates Update: Stage 1 took " + ElapsedMilliseconds1 + "ms, Stage 2 took " + ElapsedMilliseconds2 + "ms, total is " + (ElapsedMilliseconds1 + ElapsedMilliseconds2) + "ms";
 
 		UConsole.Print(msg);
@@ -171,26 +175,23 @@ public class ChunkQueuer {
 		sw.Stop();
 
 		Initialized = true;
-		//MeshChunks();
-		//UploadChunks();
+		MeshChunks();
+		UploadChunks();
 	}
 
 	public static int getChunkHash(Vector3Int position, int LOD) {
-		int hashCode = position.x.GetHashCode();
-		hashCode = (hashCode * 397) ^ position.y.GetHashCode();
-		hashCode = (hashCode * 397) ^ position.z.GetHashCode();
-		hashCode = (hashCode * 397) ^ LOD.GetHashCode();
-		return hashCode;
+		int hash = position.x;
+		hash *= 1000003;
+		hash += position.y;
+		hash *= 1000003;
+		hash += position.z;
+		hash *= 1000003;
+		hash += LOD;
+		return hash;
 	}
 
 	public void MeshChunks() {
-		List<Chunk> jobs = new List<Chunk>();
-		
-		foreach(Chunk chunk in ChunksToMesh) {
-			jobs.Add(chunk);
-		}
-
-		Parallel.ForEach(jobs, (chunk) => {
+		Parallel.ForEach(ChunksToMesh, (chunk) => {
 			UtilFuncs.Sampler sampleFn = (float x, float y, float z) => {
 				float scaleFactor = ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
 				x *= scaleFactor; 
@@ -200,12 +201,13 @@ public class ChunkQueuer {
 				y += chunk.Position.y; 
 				z += chunk.Position.z;
 
-				return UtilFuncs.Sample(x, y, z);
+				return UtilFuncs.Sample(x/Resolution, y/Resolution, z/Resolution);
 			};
 			SE.DC.Algorithm2.Run(Resolution, sampleFn, chunk);
-			ChunksToUpload.Enqueue(chunk);
+			ChunksToUpload.Add(chunk);
 			//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
 		});
+		ChunksToMesh = new ConcurrentBag<Chunk>();
 	}
 
 	public void UploadChunks() {
@@ -213,24 +215,31 @@ public class ChunkQueuer {
 		foreach(Chunk chunk in ChunksToUpload) {
 			UploadChunk(chunk);
 		}
+		ChunksToUpload = new ConcurrentBag<Chunk>();
 	}
 
 	public void UploadChunk(Chunk chunk) {
-		Debug.Log("Uploading chunk...");
+		if(chunk.Triangles.Length == 0) {
+			return;
+		}
+
+		//Debug.Log("Uploading chunk...");
 		chunk.State = ChunkState.Uploading;
-        GameObject clone = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
+        GameObject clone = UnityObjectPool.GetObject();
         Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
         clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
+		clone.GetComponent<MeshRenderer>().material.SetInt("_LOD", chunk.LOD);
+		clone.GetComponent<MeshRenderer>().material.SetVector("_ChunkPosition", new Vector4(chunk.Position.x, chunk.Position.y, chunk.Position.z));
+
         clone.name = "Node " + chunk.Key + ", LOD " + chunk.LOD;
         
         MeshFilter mf = clone.GetComponent<MeshFilter>();
-		Mesh m = new Mesh();
-		m.SetVertices(chunk.Vertices);
-		m.SetNormals(chunk.Normals);
-		m.SetUVs(0, chunk.LOD1Vertices);
-		m.SetUVs(1, chunk.LOD1Normals);
-		m.triangles = chunk.Triangles;	
-        mf.mesh = m;
+		mf.mesh.SetVertices(chunk.Vertices);
+		mf.mesh.SetNormals(chunk.Normals);
+		mf.mesh.SetUVs(0, chunk.LOD1Vertices);
+		mf.mesh.SetUVs(1, chunk.LOD1Normals);
+		mf.mesh.triangles = chunk.Triangles;
+
         clone.GetComponent<Transform>().SetParent(Parent);
         clone.GetComponent<Transform>().SetPositionAndRotation(chunk.Position, Quaternion.identity);
 		clone.GetComponent<Transform>().localScale = Vector3.one * ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
@@ -239,10 +248,10 @@ public class ChunkQueuer {
 	}
 
 	public void DrawGizmos() {
-		foreach(Chunk chunk in Chunks.Values) {
+		/*foreach(Chunk chunk in Chunks.Values) {
 			Gizmos.color = UtilFuncs.SinColor(chunk.LOD * 3f);
 			Gizmos.DrawSphere(chunk.Position, chunk.LOD + 0.5f);
-		}
+		}*/
 	}
 
 	public void AddCommands() {
@@ -252,6 +261,12 @@ public class ChunkQueuer {
 		UConsole.AddCommand("upload", (string[] tokens) => {
 			UploadChunks();
 		});
+		UConsole.AddCommand("mu", (string[] tokens) => {
+			MeshChunks();
+			UploadChunks();
+		});
+
+
 	}
 }
 }

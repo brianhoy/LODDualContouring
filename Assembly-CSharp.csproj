@@ -61,6 +61,7 @@
      <Compile Include="Assets\DualContouring\QEF\QEF.cs" />
      <Compile Include="Assets\DualContouring\QEF\SMat3.cs" />
      <Compile Include="Assets\DualContouring\QEF\SVD.cs" />
+     <Compile Include="Assets\Utility\CObjectPool.cs" />
      <Compile Include="Assets\Utility\Console\Console.cs" />
      <Compile Include="Assets\Utility\DoublePrecision\Mathd.cs" />
      <Compile Include="Assets\Utility\DoublePrecision\Vector2d.cs" />

@@ -40,8 +40,11 @@ namespace SE.DC
 			List<int> indices = new List<int>();
 
 			OctreeDrawInfo[,,] drawInfos = GenVertices(resolution, samp);
+			long genVertsTime = sw.ElapsedMilliseconds; sw.Restart();
 			GenVerticesLOD1(resolution, drawInfos, samp);
+			long genVertsLod1Time = sw.ElapsedMilliseconds; sw.Restart();
 			GenIndices(resolution, drawInfos, indices, vertices, normals, lod1vertices, lod1normals);
+			long genIndicesTime = sw.ElapsedMilliseconds;
 
 			chunk.Vertices = vertices;
 			chunk.Triangles = indices.ToArray();
@@ -51,7 +54,8 @@ namespace SE.DC
 			chunk.State = Chunks.ChunkState.Blank;
 
 			sw.Stop();
-			Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + sw.ElapsedMilliseconds + "ms");
+			Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + (genVertsTime + genVertsLod1Time + genIndicesTime) + "ms" + 
+				"(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
 		public static OctreeDrawInfo[,,] GenVertices(int resolution, UtilFuncs.Sampler samp)
@@ -177,7 +181,18 @@ namespace SE.DC
 							}
 						}
 
-						if (edgeCount == 0) continue;
+						if (edgeCount == 0) {
+							for (int i = 0; i < 8; i++) {
+							Vector3 pos = DCC.vfoffsets[i] + p;
+							if(pos.x < resolution && pos.y < resolution && pos.z < resolution && drawInfos[(int)pos.x, (int)pos.y, (int)pos.z] != null) {
+								OctreeDrawInfo info = drawInfos[(int)pos.x, (int)pos.y, (int)pos.z];
+								info.lod1Normal = Vector3.zero;
+								info.lod1Position = new Vector3(x + 1, y + 1, z + 1);
+							}
+						}
+
+							continue;
+						}
 
 						QEF.QEFSolver qef = new QEF.QEFSolver();
 						for (int i = 0; i < edgeCount; i++)
@@ -187,7 +202,7 @@ namespace SE.DC
 						Vector3 lod1position = qef.Solve(0.0001f, 4, 0.0001f);
 						Vector3 lod1normal = Vector3.zero;
 
-						Vector3 max = new Vector3(x, y, z) + Vector3.one;
+						Vector3 max = new Vector3(x, y, z) + Vector3.one * 2;
 						if (lod1position.x < x || lod1position.x > max.x ||
 							lod1position.y < y || lod1position.y > max.y ||
 							lod1position.z < z || lod1position.z > max.z)
@@ -712,6 +727,9 @@ namespace SE.DC
 							{ // flip
 								t1[0] = vs[1]; t1[1] = vs[0];
 								t2[0] = vs[3]; t2[1] = vs[0];
+
+								i1[0] = infos[1]; i1[1] = infos[0];
+								i2[0] = infos[3]; i2[1] = infos[0];
 							} 
 							for (int i = 0; i < 3; i++)
 							{

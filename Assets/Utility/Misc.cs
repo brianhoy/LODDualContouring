@@ -7,19 +7,74 @@ public static class UtilFuncs {
 
     public delegate float Sampler(float x, float y, float z);
 
-    public static float Sample(float x, float y, float z) {
-        float r = 1f;
+	public static float max = float.MinValue;
+	public static float min = float.MaxValue;
+
+	public static float Noise3DSample(float x, float y, float z) {
+        float r = 0.05f;
+        float ground = -1.5f + y; 
+		float noise = (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
+
 		float result = 0f;
-        result += -1.5f + y; 
-		//result += Sphere(x, y, z);
+		result += Mathf.Min(ground, noise);
+		//result += ground;
+		return result;
+	}
+
+    public static float Sample(float x, float y, float z) {
+		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
+
+        float r = 0.5f;
+		float result = 0f;
+        float ground = -1.5f + y; 
+
+		float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
+		//Debug.Log("Cuboid result: " + res);
+
+
+		//result += Sphere(x, y, z, 4f);
         //result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
+		result = Mathf.Min(ground, cube);
+
+		
+
+		/*if(result > max) {
+			max = result;
+			Debug.Log("New max result: " + result);
+		}
+		if(result < min) {
+			min = result;
+			Debug.Log("New min result: " + result);
+		}*/
+
+
+
+		//result += res;
         return result;
     }
 
-	public static float Sphere(float x, float y, float z) {
-		float r = 0.5f;
-		x-= 0.5f; y -= 0.5f; z -= 0.5f;
-		return x * x + y * y + z * z - r * r;
+	public static float RotatedCuboid(Vector3 q, float radius)
+	{
+		q = Matrix4x4.Rotate(Quaternion.Euler(45, 45, 45)).MultiplyVector(q);
+		return Cuboid(q, radius);
+	}
+
+	public static float Cuboid(Vector3 p, float radius)
+	{
+		Vector3 local = new Vector3(p.x, p.y, p.z);
+		Vector3 d = new Vector3(Mathf.Abs(local.x), Mathf.Abs(local.y), Mathf.Abs(local.z)) - new Vector3(radius, radius, radius);
+		float m = Mathf.Max(d.x, Mathf.Max(d.y, d.z));
+		Vector3 max = d;
+		return Mathf.Min(m, Vector3.Magnitude(max));
+	}
+
+
+	public static Vector3 abs(Vector3 p) {
+		return new Vector3(Mathf.Abs(p.x), Mathf.Abs(p.y), Mathf.Abs(p.z));
+	}
+
+	public static float Sphere(float x, float y, float z, float radius) {
+		return x * x + y * y + z * z - radius * radius;
 	}
 
     public static Vector3 Lerp(float isolevel, Point point1, Point point2) {
@@ -100,4 +155,50 @@ namespace Util {
         public long time;
         public Vector3 offset;
     }
+
+	public class BoundsInt {
+		public Vector3Int minExtents;
+		public Vector3Int maxExtents;
+
+		public BoundsInt(Vector3Int min, Vector3Int max) {
+			minExtents = min;
+			maxExtents = max;
+		}
+
+		public bool Contains(Vector3 point) {
+			if(point.x > minExtents.x && point.x < maxExtents.x &&
+				point.y > minExtents.y && point.y < maxExtents.y &&
+				point.z > minExtents.z && point.z < maxExtents.z)
+			{
+				return true;
+			}
+
+			//If not, then return false
+			return false;
+		}
+
+		public bool ContainsInclusive(Vector3 point) {
+			if(point.x >= minExtents.x && point.x <= maxExtents.x &&
+				point.y >= minExtents.y && point.y <= maxExtents.y &&
+				point.z >= minExtents.z && point.z <= maxExtents.z)
+			{
+				return true;
+			}
+
+			//If not, then return false
+			return false;
+		}
+
+		public bool ContainsPartiallyInclusive(Vector3 point) {
+			if(point.x >= minExtents.x && point.x < maxExtents.x &&
+				point.y >= minExtents.y && point.y < maxExtents.y &&
+				point.z >= minExtents.z && point.z < maxExtents.z)
+			{
+				return true;
+			}
+
+			//If not, then return false
+			return false;
+		}
+	}
 }
