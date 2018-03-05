@@ -13,6 +13,11 @@ namespace SE.DC
 		public Vector3 B;
 	}
 
+	public struct CellInfo
+	{
+		public int Index;
+	}
+
 	public static class Algorithm2
 	{
 		public static List<Vector4> AllCellGizmos = new List<Vector4>();
@@ -51,7 +56,7 @@ namespace SE.DC
 			chunk.Normals = normals;
 			chunk.LOD1Vertices = lod1vertices;
 			chunk.LOD1Normals = lod1normals;
-			chunk.State = Chunks.ChunkState.Blank;
+			chunk.State = Chunks.ChunkState.Blank; 
 
 			sw.Stop();
 			Debug.Log("Fast uniform dual contouring time for " + resolution + "^3 mesh: " + (genVertsTime + genVertsLod1Time + genIndicesTime) + "ms" + 
