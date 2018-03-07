@@ -68,7 +68,21 @@ namespace SE.DC
 				"(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
-		public static CellInfo[,,] GenVertices(int resolution, UtilFuncs.Sampler samp)
+		/*
+		
+			Chunk Data Structure (signed distance field + hermite data)
+				int[,,,] (resolution + 1)
+				sbyte,sbyte,sbyte,sbyte, : density + normal at grid corner
+				sbyte,sbyte,sbyte,sbyte, : distance along edge1 + normal
+				sbyte,sbyte,sbyte,sbyte, : distance along edge2 + normal
+				sbyte,sbyte,sbyte,sbyte  : distance along edge3 + normal
+		 */
+
+		public static sbyte[,,,] GenSampleData(int resolution, UtilFuncs.Sampler samp) {
+
+		}
+
+		public static CellInfo[,,] GenVertices(int resolution, sbyte[,,,] data, UtilFuncs.Sampler samp)
 		{
 			CellInfo[,,] cellInfos = new CellInfo[resolution, resolution, resolution];
 
