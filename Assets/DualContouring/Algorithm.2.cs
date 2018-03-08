@@ -76,10 +76,14 @@ namespace SE.DC
 				sbyte,sbyte,sbyte,sbyte, : distance along edge1 + normal
 				sbyte,sbyte,sbyte,sbyte, : distance along edge2 + normal
 				sbyte,sbyte,sbyte,sbyte  : distance along edge3 + normal
+				16 bytes/voxel
 		 */
 
-		public static sbyte[,,,] GenSampleData(int resolution, UtilFuncs.Sampler samp) {
+		public static sbyte[] GenSampleData(int resolution, UtilFuncs.Sampler samp) {
+			int res1 = resolution + 1;
+			byte[] hermiteData = new byte[res1 * res1 * res1 * 16];
 
+			
 		}
 
 		public static CellInfo[,,] GenVertices(int resolution, sbyte[,,,] data, UtilFuncs.Sampler samp)
