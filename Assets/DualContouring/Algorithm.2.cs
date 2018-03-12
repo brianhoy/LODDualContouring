@@ -68,22 +68,80 @@ namespace SE.DC
 				"(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
-		/*
-		
-			Chunk Data Structure (signed distance field + hermite data)
-				int[,,,] (resolution + 1)
-				sbyte,sbyte,sbyte,sbyte, : density + normal at grid corner
-				sbyte,sbyte,sbyte,sbyte, : distance along edge1 + normal
-				sbyte,sbyte,sbyte,sbyte, : distance along edge2 + normal
-				sbyte,sbyte,sbyte,sbyte  : distance along edge3 + normal
-				16 bytes/voxel
-		 */
+		public static Mesh Run(SE.Z.ZList zList) {
+			Mesh mesh = new Mesh();
+			Z.Crossing[,,][] voxels = zList.Voxelize();  
+			CellInfo[,,] cellInfos = new CellInfo[zList.Resolution, zList.Resolution, zList.Resolution];
 
-		public static sbyte[] GenSampleData(int resolution, UtilFuncs.Sampler samp) {
-			int res1 = resolution + 1;
-			byte[] hermiteData = new byte[res1 * res1 * res1 * 16];
+			for(int x = 0; x < Resolution; x++) {
+				for(int y = 0; y < Resolution; y++) {
+					for(int z = 0; z < Resolution; z++) {
+						int caseCode = 0;
+						for(int i = 0; i < 8; i++) {
+							Vector3Int offset = DCC.vioffsets[i];
 
-			
+							if (zList.Samples[offset.x + x, offset.y + y, offset.z + z] < 0) { caseCode |= (byte)(1 << i); }
+						}
+						if(caseCode == 0 || caseCode == 255) continue;
+
+						Vector3[] cpositions = new Vector3[4];
+						Vector3[] cnormals = new Vector3[4];
+						int edgeCount = 0;
+						for (int i = 0; i < 12 && edgeCount < 4; i++)
+						{
+							byte c1 = (byte)DCC.edgevmap[i][0];
+							byte c2 = (byte)DCC.edgevmap[i][1];
+
+							Vector3 p1 = new Vector3(x, y, z) + DCC.vfoffsets[c1];
+							Vector3 p2 = new Vector3(x, y, z) + DCC.vfoffsets[c2];
+
+							bool m1 = ((caseCode >> c1) & 1) == 1;
+							bool m2 = ((caseCode >> c2) & 1) == 1;
+
+
+							if (m1 != m2)
+							{
+								cpositions[edgeCount] = ApproximateZeroCrossingPosition(p1, p2, samp);
+								cnormals[edgeCount] = CalculateSurfaceNormal(cpositions[edgeCount], samp);
+								edgeCount++;
+							}
+						}
+
+						if (edgeCount == 0) continue;
+
+						CellInfo cellInfo = new CellInfo();
+						QEF.QEFSolver qef = new QEF.QEFSolver();
+						for (int i = 0; i < edgeCount; i++)
+						{
+							qef.Add(cpositions[i], cnormals[i]);
+						}
+						cellInfo.Position = qef.Solve(0.0001f, 4, 0.0001f);
+						//drawInfo.index = vertices.Count;
+
+						Vector3 max = new Vector3(x, y, z) + Vector3.one;
+						if (cellInfo.Position.x < x || cellInfo.Position.x > max.x ||
+							cellInfo.Position.y < y || cellInfo.Position.y > max.y ||
+							cellInfo.Position.z < z || cellInfo.Position.z > max.z)
+						{
+							cellInfo.Position = qef.MassPoint;
+						}
+
+						//vertices.Add(drawInfo.position);
+
+						for (int i = 0; i < edgeCount; i++)
+						{
+							cellInfo.Normal += cnormals[i];
+						}
+						cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
+						//normals.Add(drawInfo.averageNormal);
+						cellInfo.Corners = caseCode;
+						cellInfo.Used = true;
+						cellInfos[x, y, z] = cellInfo;
+					}
+				}
+			}
+
+			return mesh;
 		}
 
 		public static CellInfo[,,] GenVertices(int resolution, sbyte[,,,] data, UtilFuncs.Sampler samp)
