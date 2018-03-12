@@ -43,7 +43,10 @@ public class DCController : MonoBehaviour {
 		Debug.Log("Dual contouring test running...");
 
 		Chunks.Chunk chunk = new Chunks.Chunk();
-		SE.DC.Algorithm2.Run(64, UtilFuncs.Noise3DSample, chunk);
+		SE.Z.ZList zList = new SE.Z.ZList(16);
+		zList.Fill(UtilFuncs.FlatGround);
+
+		SE.DC.Algorithm2.Run(zList, chunk);
 
 		if(chunk.Triangles.Length == 0) {
 			return;

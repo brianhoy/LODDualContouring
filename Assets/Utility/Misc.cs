@@ -21,6 +21,10 @@ public static class UtilFuncs {
 		return result;
 	}
 
+    public static float FlatGround(float x, float y, float z) {
+        return -0.5f + y;
+    }
+
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 

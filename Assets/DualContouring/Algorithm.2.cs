@@ -53,7 +53,7 @@ namespace SE.DC
 			long genVertsTime = sw.ElapsedMilliseconds; sw.Restart();
 			GenVerticesLOD1(resolution, drawInfos, samp);
 			long genVertsLod1Time = sw.ElapsedMilliseconds; sw.Restart();
-			GenIndices(resolution, drawInfos, indices, vertices, normals, lod1vertices, lod1normals);
+			GenIndices(drawInfos, indices, vertices, normals, lod1vertices, lod1normals);
 			long genIndicesTime = sw.ElapsedMilliseconds;
 
 			chunk.Vertices = vertices;
@@ -68,14 +68,56 @@ namespace SE.DC
 				"(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
-		public static Mesh Run(SE.Z.ZList zList) {
+		public static Mesh Run(SE.Z.ZList zList, Chunks.Chunk chunk) {
 			Mesh mesh = new Mesh();
-			Z.Crossing[,,][] voxels = zList.Voxelize();  
-			CellInfo[,,] cellInfos = new CellInfo[zList.Resolution, zList.Resolution, zList.Resolution];
 
-			for(int x = 0; x < Resolution; x++) {
-				for(int y = 0; y < Resolution; y++) {
-					for(int z = 0; z < Resolution; z++) {
+			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+			sw.Start();
+
+			CellInfo[,,] infos = GenVerticesZList(zList);
+			List<Vector3> vertices = new List<Vector3>();
+			List<Vector3> normals = new List<Vector3>();
+			List<Vector3> lod1vertices = new List<Vector3>();
+			List<Vector3> lod1normals = new List<Vector3>();
+			List<int> indices = new List<int>();
+			GenIndices(infos, indices, vertices, normals, lod1vertices, lod1normals);
+
+			chunk.Vertices = vertices;
+			chunk.Triangles = indices.ToArray();
+			chunk.Normals = normals;
+			chunk.LOD1Vertices = lod1vertices;
+			chunk.LOD1Normals = lod1normals;
+			chunk.State = Chunks.ChunkState.Blank; 
+
+			sw.Stop();
+			Debug.Log("ZList Uniform dual contouring time for " + zList.Resolution + "^3 mesh: " + sw.ElapsedMilliseconds);
+
+			return mesh;
+		}
+
+		public static CellInfo[,,] GenVerticesZList(Z.ZList zList) {
+			Z.Crossing[,,][] voxels = zList.Voxelize();  
+			int res = zList.Resolution - 1;
+			CellInfo[,,] cellInfos = new CellInfo[res, res, res];
+
+			for(int x = 0; x < res; x++) {
+				for(int y = 0; y < res; y++) {
+					for(int z = 0; z < res; z++) {
+						for(int i = 0; i < 3; i++) {
+							if(voxels[x,y,z][i].Z != 0) {
+								//Debug.Log("Crossing at (" + x + ", " + y + ", " + z + ", i" + i + "): " + " Z" + voxels[x,y,z][i].Z + ", N" + voxels[x,y,z][i].Normal);
+							}
+						}
+					}
+				}
+			}
+
+			int numCrossings = 0;
+			int numFoundCrossings = 0;
+
+			for(int x = 0; x < res; x++) {
+				for(int y = 0; y < res; y++) {
+					for(int z = 0; z < res; z++) {
 						int caseCode = 0;
 						for(int i = 0; i < 8; i++) {
 							Vector3Int offset = DCC.vioffsets[i];
@@ -101,8 +143,22 @@ namespace SE.DC
 
 							if (m1 != m2)
 							{
-								cpositions[edgeCount] = ApproximateZeroCrossingPosition(p1, p2, samp);
-								cnormals[edgeCount] = CalculateSurfaceNormal(cpositions[edgeCount], samp);
+								int[] offind = DCC.edgevmaphermite[i];
+								Vector3Int ind0 = DCC.vioffsets[offind[0]] + new Vector3Int(x, y, z);
+								int ind1 = offind[1];
+
+								//Debug.Log("ind0: " + ind0 + ", ind1: " + ind1);
+								Z.Crossing[] cs = voxels[ind0.x, ind0.y, ind0.z];
+								Z.Crossing c = cs[ind1];
+								numCrossings++;
+
+								Debug.Log("ind1: " + ind1);
+
+								//Debug.Log("Crossing: " + c.Z + ", "  + c.Normal);
+								if(c.Z != 0) numFoundCrossings++;
+
+								cpositions[edgeCount] = ind0 + c.Z * DCC.vfdirs[ind1];
+								cnormals[edgeCount] = c.Normal;
 								edgeCount++;
 							}
 						}
@@ -134,17 +190,17 @@ namespace SE.DC
 						}
 						cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
 						//normals.Add(drawInfo.averageNormal);
-						cellInfo.Corners = caseCode;
+						cellInfo.Corners = (byte)caseCode;
 						cellInfo.Used = true;
 						cellInfos[x, y, z] = cellInfo;
 					}
 				}
 			}
-
-			return mesh;
+			Debug.Log("Num crossings: " + numCrossings + ", numFoundCrossings: " + numFoundCrossings);	
+			return cellInfos;
 		}
 
-		public static CellInfo[,,] GenVertices(int resolution, sbyte[,,,] data, UtilFuncs.Sampler samp)
+		public static CellInfo[,,] GenVertices(int resolution, UtilFuncs.Sampler samp)
 		{
 			CellInfo[,,] cellInfos = new CellInfo[resolution, resolution, resolution];
 
@@ -311,8 +367,9 @@ namespace SE.DC
 			}
 		}
 
-		public static void GenIndices(int resolution, CellInfo[,,] cellInfos, List<int> indices, List<Vector3> vertices, List<Vector3> normals, List<Vector3> lod1vertices, List<Vector3> lod1normals)
+		public static void GenIndices(CellInfo[,,] cellInfos, List<int> indices, List<Vector3> vertices, List<Vector3> normals, List<Vector3> lod1vertices, List<Vector3> lod1normals)
 		{
+			int resolution = cellInfos.GetLength(0) - 1;
 			for (int x = 0; x < resolution; x++)
 			{
 				for (int y = 0; y < resolution; y++)

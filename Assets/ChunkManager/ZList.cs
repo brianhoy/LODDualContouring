@@ -21,9 +21,9 @@ public class ZList {
 	public int Resolution;
 	public static Vector3Int[] Directions = { new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(0, 0, 1) };
 
-	public ZList(int Resolution) {
+	public ZList(int resolution) {
 		Rays = new Ray[3][,];
-		this.Resolution = Resolution;
+		this.Resolution = resolution;
 		for(int dir = 0; dir < 3; dir++) {
 			Rays[dir] = new Ray[Resolution, Resolution];
 			for(int x = 0; x < Resolution; x++) {
@@ -36,13 +36,12 @@ public class ZList {
 	}
 
 	public void Fill(UtilFuncs.Sampler fn) {
-		float[,,] data = new float[Resolution,Resolution,Resolution];
 		Samples = new sbyte[Resolution,Resolution,Resolution];
 		for(int x = 0; x < Resolution; x++) {
 			for(int y = 0; y < Resolution; y++) {
 				for(int z = 0; z < Resolution; z++) {
 					float sample = fn(x, y, z);
-					data[x,y,z] = sample;
+					sample = Mathf.Clamp(sample, -1, 1);
 					Samples[x,y,z] = (sbyte)(sample * 127);
 				}
 			}
@@ -51,10 +50,10 @@ public class ZList {
 		// xy plane
 		for(int x = 0; x < Resolution; x++) {
 			for(int y = 0; y < Resolution; y++) {
-				float lastSample = data[x,y,0];
+				sbyte lastSample = Samples[x,y,0];
 
 				for(int z = 1; z < Resolution; z++) {
-					float nextSample = data[x,y,1];
+					sbyte nextSample = Samples[x,y,z];
 					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y, z - 1), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
@@ -69,10 +68,10 @@ public class ZList {
 		// yz plane
 		for(int y = 0; y < Resolution; y++) {
 			for(int z = 0; z < Resolution; z++) {
-				float lastSample = data[y,z,0];
+				sbyte lastSample = Samples[0,y,z];
 
 				for(int x = 1; x < Resolution; x++) {
-					float nextSample = data[y,z,1];
+					sbyte nextSample = Samples[x,y,z];
 					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x - 1, y, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
@@ -87,15 +86,15 @@ public class ZList {
 		// xz plane
 		for(int x = 0; x < Resolution; x++) {
 			for(int z = 0; z < Resolution; z++) {
-				float lastSample = data[x,z,0];
+				sbyte lastSample = Samples[x,0,z];
 
 				for(int y = 1; y < Resolution; y++) {
-					float nextSample = data[x,y,1];
+					sbyte nextSample = Samples[x,y,z];
 					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y - 1, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
-						Crossing c = new Crossing(position.z, normal);
-						Rays[2][x,y].Crossings.Add(c);
+						Crossing c = new Crossing(position.y, normal);
+						Rays[2][x,z].Crossings.Add(c);
 					}
 					lastSample = nextSample;
 				}
@@ -125,17 +124,17 @@ public class ZList {
 		}
 		for(int y = 0; y < Resolution; y++) { // yz rays
 			for(int z = 0; z < Resolution; z++) {
-				foreach(Crossing c in Rays[0][y,z].Crossings) {
+				foreach(Crossing c in Rays[2][y,z].Crossings) {
 					int x = (int)c.Z;
-					voxels[x,y,z][0] = c;
+					voxels[x,y,z][1] = c;
 				}
 			}
 		}
 		for(int x = 0; x < Resolution; x++) { // xz rays
 			for(int z = 0; z < Resolution; z++) {
-				foreach(Crossing c in Rays[0][x,z].Crossings) {
+				foreach(Crossing c in Rays[1][x,z].Crossings) {
 					int y = (int)c.Z;
-					voxels[x,y,z][0] = c;
+					voxels[x,y,z][2] = c;
 				}
 			}
 		}

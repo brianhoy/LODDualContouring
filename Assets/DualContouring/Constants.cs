@@ -45,6 +45,12 @@ namespace SE.DC {
 		new Vector3Int(1, 0, 0), new Vector3Int(1, 0, 1), new Vector3Int(1, 1, 0), new Vector3Int(1, 1, 1)
 	};
 
+	public static readonly int[][] edgevmaphermite = {
+		new int[] {0, 0}, new int[] {1, 0}, new int[] {2, 0}, new int[] {3, 0},
+		new int[] {0, 1}, new int[] {1, 1}, new int[] {4, 1}, new int[] {5, 1},
+		new int[] {0, 2}, new int[] {2, 2}, new int[] {4, 2}, new int[] {6, 2}
+	};
+
 	public static readonly int[][] edgevmap = 
 	{
 		new int[] {0,4}, new int[] {1,5}, new int[] {2,6}, new int[] {3,7},	// x-axis 
