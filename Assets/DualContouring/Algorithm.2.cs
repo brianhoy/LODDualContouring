@@ -152,12 +152,17 @@ namespace SE.DC
 								Z.Crossing c = cs[ind1];
 								numCrossings++;
 
-								Debug.Log("ind1: " + ind1);
+								//Debug.Log("ind1: " + ind1);
 
 								//Debug.Log("Crossing: " + c.Z + ", "  + c.Normal);
 								if(c.Z != 0) numFoundCrossings++;
 
-								cpositions[edgeCount] = ind0 + c.Z * DCC.vfdirs[ind1];
+								cpositions[edgeCount] = ind0;
+								if(ind1 == 0) cpositions[edgeCount].x = 0;
+								if(ind1 == 1) cpositions[edgeCount].y = 0;
+								if(ind1 == 2) cpositions[edgeCount].z = 0;
+								cpositions[edgeCount] += c.Z * DCC.vfdirs[ind1];
+
 								cnormals[edgeCount] = c.Normal;
 								edgeCount++;
 							}
@@ -369,7 +374,7 @@ namespace SE.DC
 
 		public static void GenIndices(CellInfo[,,] cellInfos, List<int> indices, List<Vector3> vertices, List<Vector3> normals, List<Vector3> lod1vertices, List<Vector3> lod1normals)
 		{
-			int resolution = cellInfos.GetLength(0) - 1;
+			int resolution = cellInfos.GetLength(0);
 			for (int x = 0; x < resolution; x++)
 			{
 				for (int y = 0; y < resolution; y++)

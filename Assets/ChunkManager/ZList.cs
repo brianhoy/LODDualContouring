@@ -47,24 +47,6 @@ public class ZList {
 			}
 		}
 
-		// xy plane
-		for(int x = 0; x < Resolution; x++) {
-			for(int y = 0; y < Resolution; y++) {
-				sbyte lastSample = Samples[x,y,0];
-
-				for(int z = 1; z < Resolution; z++) {
-					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
-						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y, z - 1), new Vector3(x, y, z), fn);
-						Vector3 normal = CalculateSurfaceNormal(position, fn);
-						Crossing c = new Crossing(position.z, normal);
-						Rays[0][x,y].Crossings.Add(c);
-					}
-					lastSample = nextSample;
-				}
-			}
-		}
-
 		// yz plane
 		for(int y = 0; y < Resolution; y++) {
 			for(int z = 0; z < Resolution; z++) {
@@ -76,7 +58,7 @@ public class ZList {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x - 1, y, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
 						Crossing c = new Crossing(position.x, normal);
-						Rays[1][y,z].Crossings.Add(c);
+						Rays[0][y,z].Crossings.Add(c);
 					}
 					lastSample = nextSample;
 				}
@@ -94,39 +76,47 @@ public class ZList {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y - 1, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
 						Crossing c = new Crossing(position.y, normal);
-						Rays[2][x,z].Crossings.Add(c);
+						Rays[1][x,z].Crossings.Add(c);
 					}
 					lastSample = nextSample;
 				}
 			}
 		}
 
+		// xy plane
+		for(int x = 0; x < Resolution; x++) {
+			for(int y = 0; y < Resolution; y++) {
+				sbyte lastSample = Samples[x,y,0];
+
+				for(int z = 1; z < Resolution; z++) {
+					sbyte nextSample = Samples[x,y,z];
+					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
+						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y, z - 1), new Vector3(x, y, z), fn);
+						Vector3 normal = CalculateSurfaceNormal(position, fn);
+						Crossing c = new Crossing(position.z, normal);
+						Rays[2][x,y].Crossings.Add(c);
+					}
+					lastSample = nextSample;
+				}
+			}
+		}
 	}
 
 	public Crossing[,,][] Voxelize() {
-		int res1 = Resolution + 1;
-		Crossing[,,][] voxels = new Crossing[res1,res1,res1][];
-		for(int x = 0; x < res1; x++) {
-			for(int y = 0; y < res1; y++) {
-				for(int z = 0; z < res1; z++) {
+		Crossing[,,][] voxels = new Crossing[Resolution,Resolution,Resolution][];
+		for(int x = 0; x < Resolution; x++) {
+			for(int y = 0; y < Resolution; y++) {
+				for(int z = 0; z < Resolution; z++) {
 					voxels[x,y,z] = new Crossing[3];
 				}
 			}
 		}
 
-		for(int x = 0; x < Resolution; x++) { // xy rays
-			for(int y = 0; y < Resolution; y++) {
-				foreach(Crossing c in Rays[0][x,y].Crossings) {
-					int z = (int)c.Z;
-					voxels[x,y,z][0] = c;
-				}
-			}
-		}
 		for(int y = 0; y < Resolution; y++) { // yz rays
 			for(int z = 0; z < Resolution; z++) {
 				foreach(Crossing c in Rays[2][y,z].Crossings) {
 					int x = (int)c.Z;
-					voxels[x,y,z][1] = c;
+					voxels[x,y,z][0] = c;
 				}
 			}
 		}
@@ -134,13 +124,55 @@ public class ZList {
 			for(int z = 0; z < Resolution; z++) {
 				foreach(Crossing c in Rays[1][x,z].Crossings) {
 					int y = (int)c.Z;
+					voxels[x,y,z][1] = c;
+				}
+			}
+		}
+		for(int x = 0; x < Resolution; x++) { // xy rays
+			for(int y = 0; y < Resolution; y++) {
+				foreach(Crossing c in Rays[0][x,y].Crossings) {
+					int z = (int)c.Z;
 					voxels[x,y,z][2] = c;
 				}
 			}
 		}
 
-
 		return voxels;
+	}
+
+	public static void PrintVoxelData(Crossing[,,][] voxels) {
+		string result = "PrintVoxelData()";
+		for(int y = 0; y < voxels.GetLength(0); y++) {
+			result += "\nxz slice at y = " + y;
+			for(int x = 0; x < voxels.GetLength(0); x++) {
+				for(int z = 0; z < voxels.GetLength(0); z++) {
+					Crossing[] crossings = voxels[x,y,z];
+					result += "{";
+					for(int i = 0; i < 3; i++) {
+						if(crossings[i].Z != 0) {
+							result += "C ";
+						}
+						else {
+							result += "0 ";
+						}
+					}
+					result += "} ";
+				}
+				result += "\n";
+			}
+		}
+		Debug.Log(result);
+
+	}
+
+	public static void PrintZList(ZList z) {
+		string result = "PrintZList()\n";
+		string[] types = new string[] {"yz", "xz", "xy"};
+		for(int x = 0; x < z.Resolution; x++) {
+			for(int y = 0; y < z.Resolution; y++) {
+				Ray r = z.Rays[0][x,y];
+			}
+		}
 	}
 
 	public static Vector3 ApproximateZeroCrossingPosition(Vector3 p0, Vector3 p1, UtilFuncs.Sampler sample)
