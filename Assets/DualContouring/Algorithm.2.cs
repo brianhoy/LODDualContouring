@@ -23,6 +23,12 @@ namespace SE.DC
 		public byte Corners;
 	}
 
+	public struct CellQEF
+	{
+		public CellInfo Info;
+		public QEF.QEFSolver Qef;
+	}
+
 	public static class Algorithm2
 	{
 		public static List<Vector4> AllCellGizmos = new List<Vector4>();
@@ -93,6 +99,26 @@ namespace SE.DC
 			Debug.Log("ZList Uniform dual contouring time for " + zList.Resolution + "^3 mesh: " + sw.ElapsedMilliseconds);
 
 			return mesh;
+		}
+
+		public static CellInfo[,,] GenVerticesZList2(Z.ZList zList) {
+			int res = zList.Resolution - 1;
+			CellInfo[,,] cellInfos = new CellInfo[res, res, res];
+
+			for(int i = 0; i < )
+
+			for(int x = 0; x < zList.Resolution; x++) {
+				for(int z = 0; z < zList.Resolution; z++) {
+					Z.Ray r = zList.Rays[0][x,z];
+					foreach(Z.Crossing c in r.Crossings) {
+						float y = c.Z;
+						Vector3 position = new Vector3(x, y, z);
+						cellInfos[x-1,(int)y,z]
+					}
+
+				}
+			}
+
 		}
 
 		public static CellInfo[,,] GenVerticesZList(Z.ZList zList) {
