@@ -50,7 +50,7 @@ public class DCController : MonoBehaviour {
 		Chunks.Chunk chunk = new Chunks.Chunk();
 		testChunk = chunk;
 		SE.Z.ZList zList = new SE.Z.ZList(Resolution+1);
-		zList.Fill(UtilFuncs.Sample);
+		zList.Fill(UtilFuncs.Noise3DSample);
 
 		SE.DC.Algorithm2.Run(zList, chunk);
 

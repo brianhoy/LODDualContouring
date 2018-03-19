@@ -211,6 +211,26 @@ public class ZList {
 		return new Vector3(dx, dy, dz).normalized;
 	}
 
+	public static void RayUnion(Ray A, Ray B) {
+		foreach(Crossing c in B.Crossings) {
+			A.Crossings.Add(c);
+		}
+		A.Crossings.Sort((Crossing cA, Crossing cB) => {
+			if(cA.Z < cB.Z) { return -1; }
+			else if(cB.Z < cA.Z) { return 1; }
+			return 0;
+		});
+		MergeRegion(A);
+	}
+
+	public static void MergeRegion(Ray R, Vector3 raydir) {
+		int level = 0;
+		List<Crossing> T = new List<Crossing>();
+		foreach(Crossing c in R.Crossings) {
+			if(Vector3.Dot(vfdirs))
+		}
+	}
+	
 
 
 }

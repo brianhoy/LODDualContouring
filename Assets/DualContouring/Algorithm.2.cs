@@ -15,7 +15,6 @@ namespace SE.DC
 
 	public struct CellInfo
 	{
-		public bool Used;
 		public Vector3 Position;
 		public Vector3 Lod1Position;
 		public Vector3 Normal;
@@ -127,7 +126,6 @@ namespace SE.DC
 
 						qefs[x,y,z] = new QEF.QEFSolver();
 						cellInfos[x,y,z].Corners = caseCode;
-						cellInfos[x,y,z].Used = true;
 					}
 				}
 			}
@@ -172,7 +170,7 @@ namespace SE.DC
 			for(int x = 0; x < resm1; x++) {
 				for(int y = 0; y < resm1; y++) {
 					for(int z = 0; z < resm1; z++) {
-						if(!cellInfos[x,y,z].Used) continue;
+						if(cellInfos[x,y,z].Corners == 0) continue;
 
 						QEF.QEFSolver qef = qefs[x,y,z];
 						Vector3 position = qef.Solve(0.0001f, 4, 0.0001f);
@@ -303,7 +301,6 @@ namespace SE.DC
 						cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
 						//normals.Add(drawInfo.averageNormal);
 						cellInfo.Corners = (byte)caseCode;
-						cellInfo.Used = true;
 						cellInfos[x, y, z] = cellInfo;
 					}
 				}
@@ -385,7 +382,6 @@ namespace SE.DC
 						cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
 						//normals.Add(drawInfo.averageNormal);
 						cellInfo.Corners = caseCode;
-						cellInfo.Used = true;
 						cellInfos[x, y, z] = cellInfo;
 					}
 				}
@@ -437,7 +433,7 @@ namespace SE.DC
 						if (edgeCount == 0) {
 							for (int i = 0; i < 8; i++) {
 								Vector3Int pos = DCC.vioffsets[i] + intPos;
-								if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Used) {
+								if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Corners != 0) {
 									cellInfos[pos.x, pos.y, pos.z].Lod1Normal = Vector3.zero;
 									cellInfos[pos.x, pos.y, pos.z].Lod1Position = new Vector3(x + 1, y + 1, z + 1);
 								}
@@ -469,7 +465,7 @@ namespace SE.DC
 
 						for (int i = 0; i < 8; i++) {
 							Vector3Int pos = DCC.vioffsets[i] + new Vector3Int(x, y, z);
-							if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Used) {
+							if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Corners != 0) {
 								cellInfos[pos.x, pos.y, pos.z].Lod1Normal = lod1normal;
 								cellInfos[pos.x, pos.y, pos.z].Lod1Position = lod1position;
 							}
@@ -493,7 +489,7 @@ namespace SE.DC
 						}
 
 						CellInfo cellInfo = cellInfos[x, y, z];
-						if (!cellInfo.Used)
+						if (cellInfo.Corners == 0)
 						{
 							continue;
 						}
