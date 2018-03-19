@@ -80,7 +80,7 @@ namespace SE.DC
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 			sw.Start();
 
-			CellInfo[,,] infos = GenVerticesZList(zList);
+			CellInfo[,,] infos = GenVerticesZList2(zList);
 			List<Vector3> vertices = new List<Vector3>();
 			List<Vector3> normals = new List<Vector3>();
 			List<Vector3> lod1vertices = new List<Vector3>();
@@ -96,29 +96,110 @@ namespace SE.DC
 			chunk.State = Chunks.ChunkState.Blank; 
 
 			sw.Stop();
-			Debug.Log("ZList Uniform dual contouring time for " + zList.Resolution + "^3 mesh: " + sw.ElapsedMilliseconds);
-
+			string msg = "ZList Uniform dual contouring time for " + zList.Resolution + "^3 mesh: " + sw.ElapsedMilliseconds;
+			Debug.Log(msg);
+			UConsole.Print(msg);
 			return mesh;
 		}
 
 		public static CellInfo[,,] GenVerticesZList2(Z.ZList zList) {
-			int res = zList.Resolution - 1;
-			CellInfo[,,] cellInfos = new CellInfo[res, res, res];
+			int res = zList.Resolution;
+			int resm1 = zList.Resolution - 1;
+			QEF.QEFSolver[,,] qefs = new QEF.QEFSolver[resm1, resm1, resm1];
+			CellInfo[,,] cellInfos = new CellInfo[resm1, resm1, resm1];
 
-			for(int i = 0; i < )
+			for(int x = 0; x < resm1; x++) {
+				for(int y = 0; y < resm1; y++) {
+					for(int z = 0; z < resm1; z++) {
+						byte caseCode = 0;
 
-			for(int x = 0; x < zList.Resolution; x++) {
-				for(int z = 0; z < zList.Resolution; z++) {
-					Z.Ray r = zList.Rays[0][x,z];
-					foreach(Z.Crossing c in r.Crossings) {
-						float y = c.Z;
-						Vector3 position = new Vector3(x, y, z);
-						cellInfos[x-1,(int)y,z]
+                        if (zList.Samples[x  ,y  ,z  ] <= 0) caseCode |= 1;
+                        if (zList.Samples[x  ,y  ,z+1] <= 0) caseCode |= 2;
+                        if (zList.Samples[x  ,y+1,z  ] <= 0) caseCode |= 4;
+                        if (zList.Samples[x  ,y+1,z+1] <= 0) caseCode |= 8;
+                        if (zList.Samples[x+1,y  ,z  ] <= 0) caseCode |= 16;
+                        if (zList.Samples[x+1,y  ,z+1] <= 0) caseCode |= 32;
+                        if (zList.Samples[x+1,y+1,z  ] <= 0) caseCode |= 64;
+                        if (zList.Samples[x+1,y+1,z+1] <= 0) caseCode |= 128;
+
+						
+						if(caseCode == 0 || caseCode == 255) continue;
+
+						qefs[x,y,z] = new QEF.QEFSolver();
+						cellInfos[x,y,z].Corners = caseCode;
+						cellInfos[x,y,z].Used = true;
 					}
-
 				}
 			}
 
+			for(int y = 0; y < res; y++) { // yz rays
+				for(int z = 0; z < res; z++) {
+					foreach(Z.Crossing c in zList.Rays[0][y,z].Crossings) {
+						int x = c.Index;
+						Vector3 position = new Vector3(c.Z, y, z);
+						if(y < resm1 && z < resm1) qefs[x,y,z].Add(position, c.Normal);
+						if(y - 1 >= 0 && z - 1 >= 0) qefs[x,y-1,z-1].Add(position, c.Normal);
+						if(y < resm1 && z - 1 >= 0) qefs[x,y,z-1].Add(position, c.Normal);
+						if(y - 1 >= 0 && z < resm1) qefs[x,y-1,z].Add(position, c.Normal);
+					}
+				}
+			}
+			for(int x = 0; x < res; x++) { // xz rays
+				for(int z = 0; z < res; z++) {
+					foreach(Z.Crossing c in zList.Rays[1][x,z].Crossings) {
+						int y = c.Index;
+						Vector3 position = new Vector3(x, c.Z, z);
+						if(x < resm1 && z < resm1) qefs[x,y,z].Add(position, c.Normal);
+						if(x - 1 >= 0 && z - 1 >= 0) qefs[x-1,y,z-1].Add(position, c.Normal);
+						if(x < resm1 && z - 1 >= 0) qefs[x,y,z-1].Add(position, c.Normal);
+						if(x - 1 >= 0 && z < resm1) qefs[x-1,y,z].Add(position, c.Normal);
+					}
+				}
+			}
+			for(int x = 0; x < res; x++) { // xy rays
+				for(int y = 0; y < res; y++) {
+					foreach(Z.Crossing c in zList.Rays[2][x,y].Crossings) {
+						int z = c.Index;
+						Vector3 position = new Vector3(x, y, c.Z);
+						if(x < resm1 && y < resm1) qefs[x,y,z].Add(new Vector3(x, y, c.Z), c.Normal);
+						if(x - 1 >= 0 && y - 1 >= 0) qefs[x-1,y-1,z].Add(position, c.Normal);
+						if(x < resm1 && y - 1 >= 0) qefs[x,y-1,z].Add(position, c.Normal);
+						if(x - 1 >= 0 && y < resm1) qefs[x-1,y,z].Add(position, c.Normal);
+					}
+				}
+			}
+
+			for(int x = 0; x < resm1; x++) {
+				for(int y = 0; y < resm1; y++) {
+					for(int z = 0; z < resm1; z++) {
+						if(!cellInfos[x,y,z].Used) continue;
+
+						QEF.QEFSolver qef = qefs[x,y,z];
+						Vector3 position = qef.Solve(0.0001f, 4, 0.0001f);
+						Vector3 max = new Vector3(x, y, z) + Vector3.one;
+						if (position.x < x || position.x > max.x ||
+							position.y < y || position.y > max.y ||
+							position.z < z || position.z > max.z)
+						{
+							position = qefs[x,y,z].MassPoint;
+						}
+						
+						Vector3 normal = Vector3.zero;
+
+						//vertices.Add(drawInfo.position);
+
+						/*for (int i = 0; i < qef.; i++)
+						{
+							normal += cnormals[i];
+						}*/
+						//cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
+
+						cellInfos[x,y,z].Position = position;
+						cellInfos[x,y,z].Normal = Vector3.up;
+					}
+				}
+			}
+			return cellInfos;
 		}
 
 		public static CellInfo[,,] GenVerticesZList(Z.ZList zList) {

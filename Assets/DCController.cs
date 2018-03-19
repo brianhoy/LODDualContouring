@@ -15,6 +15,8 @@ public class DCController : MonoBehaviour {
 
 	Chunks.ChunkQueuer queuer;
 
+	Chunks.Chunk testChunk;
+
 	// Use this for initialization
 	void Start () {
 		//Util.ExtractionResult res = SE.DC.Algorithm.Run(32, 0, UtilFuncs.Sample, false);
@@ -31,7 +33,7 @@ public class DCController : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		if(Input.GetKeyDown(KeyCode.U)) {
-			
+			DualContouringTest();
 		}
 		//queuer.Update();
 		Vector3 pos = Camera.GetComponent<Transform>().position;
@@ -41,9 +43,13 @@ public class DCController : MonoBehaviour {
 
 	void DualContouringTest() {
 		Debug.Log("Dual contouring test running...");
+		if(testChunk != null) {
+			UnityEngine.Object.Destroy(testChunk.UnityObject);
+		}
 
 		Chunks.Chunk chunk = new Chunks.Chunk();
-		SE.Z.ZList zList = new SE.Z.ZList(20);
+		testChunk = chunk;
+		SE.Z.ZList zList = new SE.Z.ZList(Resolution+1);
 		zList.Fill(UtilFuncs.Sample);
 
 		SE.DC.Algorithm2.Run(zList, chunk);

@@ -5,9 +5,11 @@ namespace SE.Z {
 public struct Crossing {
 	public float Z;
 	public Vector3 Normal;
-	public Crossing(float Z, Vector3 Normal) {
+	public byte Index;
+	public Crossing(float Z, Vector3 Normal, byte Index) {
 		this.Z = Z;
 		this.Normal = Normal;
+		this.Index = Index;
 	}
 }
 
@@ -54,10 +56,10 @@ public class ZList {
 
 				for(int x = 1; x < Resolution; x++) {
 					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
+					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x - 1, y, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
-						Crossing c = new Crossing(position.x, normal);
+						Crossing c = new Crossing(position.x, normal, (byte)(x - 1));
 						Rays[0][y,z].Crossings.Add(c);
 					}
 					lastSample = nextSample;
@@ -72,10 +74,10 @@ public class ZList {
 
 				for(int y = 1; y < Resolution; y++) {
 					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
+					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y - 1, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
-						Crossing c = new Crossing(position.y, normal);
+						Crossing c = new Crossing(position.y, normal, (byte)(y - 1));
 						Rays[1][x,z].Crossings.Add(c);
 					}
 					lastSample = nextSample;
@@ -90,10 +92,10 @@ public class ZList {
 
 				for(int z = 1; z < Resolution; z++) {
 					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample < 0 || lastSample < 0 && nextSample > 0) {
+					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y, z - 1), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
-						Crossing c = new Crossing(position.z, normal);
+						Crossing c = new Crossing(position.z, normal, (byte)(z - 1));
 						Rays[2][x,y].Crossings.Add(c);
 					}
 					lastSample = nextSample;

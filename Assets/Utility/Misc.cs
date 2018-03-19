@@ -22,7 +22,7 @@ public static class UtilFuncs {
 	}
 
     public static float FlatGround(float x, float y, float z) {
-        return -0.5f + y;
+        return -0.5f + z;
     }
 
     public static float Sample(float x, float y, float z) {
