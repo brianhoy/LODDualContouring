@@ -22,7 +22,7 @@ public static class UtilFuncs {
 	}
 
     public static float FlatGround(float x, float y, float z) {
-        return -0.5f + z;
+        return -0.5f + y;
     }
 
     public static float Sample(float x, float y, float z) {
@@ -77,8 +77,11 @@ public static class UtilFuncs {
 		return new Vector3(Mathf.Abs(p.x), Mathf.Abs(p.y), Mathf.Abs(p.z));
 	}
 
-	public static float Sphere(float x, float y, float z, float radius) {
-		return x * x + y * y + z * z - radius * radius;
+	public static float Sphere(float x, float y, float z) {
+        x -= 8;
+        y -= 8;
+        z -= 8;
+		return x * x + y * y + z * z - 5 * 5;
 	}
 
     public static Vector3 Lerp(float isolevel, Point point1, Point point2) {

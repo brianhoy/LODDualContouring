@@ -19,7 +19,8 @@ public class Ray {
 
 public class ZList {
 	public Ray[][,] Rays;
-	public sbyte[,,] Samples;
+	//public sbyte[,,] Samples;
+	public bool[,,] SampleSigns;
 	public int Resolution;
 	public static Vector3Int[] Directions = { new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), new Vector3Int(0, 0, 1) };
 
@@ -38,13 +39,14 @@ public class ZList {
 	}
 
 	public void Fill(UtilFuncs.Sampler fn) {
-		Samples = new sbyte[Resolution,Resolution,Resolution];
+		SampleSigns = new bool[Resolution,Resolution,Resolution];
 		for(int x = 0; x < Resolution; x++) {
 			for(int y = 0; y < Resolution; y++) {
 				for(int z = 0; z < Resolution; z++) {
 					float sample = fn(x, y, z);
 					sample = Mathf.Clamp(sample, -1, 1);
-					Samples[x,y,z] = (sbyte)(sample * 127);
+					SampleSigns[x,y,z] = sample > 0;
+					//Samples[x,y,z] = (sbyte)(sample * 127);
 				}
 			}
 		}
@@ -52,17 +54,17 @@ public class ZList {
 		// yz plane
 		for(int y = 0; y < Resolution; y++) {
 			for(int z = 0; z < Resolution; z++) {
-				sbyte lastSample = Samples[0,y,z];
+				bool lastSign = SampleSigns[0,y,z]; //Samples[0,y,z];
 
 				for(int x = 1; x < Resolution; x++) {
-					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
+					bool nextSign = SampleSigns[x,y,z];
+					if(lastSign != nextSign) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x - 1, y, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
 						Crossing c = new Crossing(position.x, normal, (byte)(x - 1));
 						Rays[0][y,z].Crossings.Add(c);
 					}
-					lastSample = nextSample;
+					lastSign = nextSign;
 				}
 			}
 		}
@@ -70,17 +72,17 @@ public class ZList {
 		// xz plane
 		for(int x = 0; x < Resolution; x++) {
 			for(int z = 0; z < Resolution; z++) {
-				sbyte lastSample = Samples[x,0,z];
+				bool lastSign = SampleSigns[x,0,z];
 
 				for(int y = 1; y < Resolution; y++) {
-					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
+					bool nextSign = SampleSigns[x,y,z];
+					if(lastSign != nextSign) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y - 1, z), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
 						Crossing c = new Crossing(position.y, normal, (byte)(y - 1));
 						Rays[1][x,z].Crossings.Add(c);
 					}
-					lastSample = nextSample;
+					lastSign = nextSign;
 				}
 			}
 		}
@@ -88,17 +90,17 @@ public class ZList {
 		// xy plane
 		for(int x = 0; x < Resolution; x++) {
 			for(int y = 0; y < Resolution; y++) {
-				sbyte lastSample = Samples[x,y,0];
+				bool lastSign = SampleSigns[x,y,0];
 
 				for(int z = 1; z < Resolution; z++) {
-					sbyte nextSample = Samples[x,y,z];
-					if(lastSample > 0 && nextSample <= 0 || lastSample <= 0 && nextSample > 0) {
+					bool nextSign = SampleSigns[x,y,z];
+					if(lastSign != nextSign) {
 						Vector3 position = ApproximateZeroCrossingPosition(new Vector3(x, y, z - 1), new Vector3(x, y, z), fn);
 						Vector3 normal = CalculateSurfaceNormal(position, fn);
 						Crossing c = new Crossing(position.z, normal, (byte)(z - 1));
 						Rays[2][x,y].Crossings.Add(c);
 					}
-					lastSample = nextSample;
+					lastSign = nextSign;
 				}
 			}
 		}
@@ -211,8 +213,23 @@ public class ZList {
 		return new Vector3(dx, dy, dz).normalized;
 	}
 
-	public static void RayUnion(Ray A, Ray B) {
+	public static void RayUnion(Ray A, Ray B, Vector3 raydir) {
 		foreach(Crossing c in B.Crossings) {
+			A.Crossings.Add(c);
+		}
+		A.Crossings.Sort((Crossing cA, Crossing cB) => {
+			if(cA.Z > cB.Z) { return -1; }
+			else if(cB.Z > cA.Z) { return 1; }
+			return 0;
+		});
+		MergeRegion(A, raydir);
+	}
+
+	public static void RaySubtraction(Ray A, Ray B, Vector3 raydir) {
+		for(int i = 0; i < B.Crossings.Count; i++) {
+			Crossing c = B.Crossings[i];
+			c.Normal = c.Normal * -1;
+			B.Crossings[i] = c;
 			A.Crossings.Add(c);
 		}
 		A.Crossings.Sort((Crossing cA, Crossing cB) => {
@@ -220,17 +237,52 @@ public class ZList {
 			else if(cB.Z < cA.Z) { return 1; }
 			return 0;
 		});
-		MergeRegion(A);
+		MergeRegion(A, raydir);
 	}
 
 	public static void MergeRegion(Ray R, Vector3 raydir) {
 		int level = 0;
 		List<Crossing> T = new List<Crossing>();
 		foreach(Crossing c in R.Crossings) {
-			if(Vector3.Dot(vfdirs))
+			if(Vector3.Dot(raydir, c.Normal) < 0) {
+				level -= 1;
+				if(level == 0) {
+					T.Add(c);
+				}
+			}
+			else {
+				if(level == 0) {
+					T.Add(c);
+				}
+				level += 1;
+			}
 		}
+		R.Crossings = T;
 	}
 	
+	public void AddZList(ZList zListB) {
+		Debug.Assert(zListB.Resolution == Resolution);
+
+		for(int x = 0; x < Resolution; x++) {
+			for(int y = 0; y < Resolution; y++) {
+				for(int z = 0; z < Resolution; z++) {
+					SampleSigns[x,y,z] = SampleSigns[x,y,z] || zListB.SampleSigns[x,y,z];
+				}
+			}
+		}
+
+		for(int rayDir = 0; rayDir < 3; rayDir++) {
+			Vector3 dir = SE.DC.DCC.vfdirs[0];
+			for(int c1 = 0; c1 < Resolution; c1++) {
+				for(int c2 = 0; c2 < Resolution; c2++) {
+					Ray A = Rays[rayDir][c1,c2];
+					Ray B = zListB.Rays[rayDir][c1,c2];
+					RayUnion(A, B, dir);
+				}
+			}
+		}
+
+	}
 
 
 }

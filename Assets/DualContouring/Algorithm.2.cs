@@ -112,14 +112,14 @@ namespace SE.DC
 					for(int z = 0; z < resm1; z++) {
 						byte caseCode = 0;
 
-                        if (zList.Samples[x  ,y  ,z  ] <= 0) caseCode |= 1;
-                        if (zList.Samples[x  ,y  ,z+1] <= 0) caseCode |= 2;
-                        if (zList.Samples[x  ,y+1,z  ] <= 0) caseCode |= 4;
-                        if (zList.Samples[x  ,y+1,z+1] <= 0) caseCode |= 8;
-                        if (zList.Samples[x+1,y  ,z  ] <= 0) caseCode |= 16;
-                        if (zList.Samples[x+1,y  ,z+1] <= 0) caseCode |= 32;
-                        if (zList.Samples[x+1,y+1,z  ] <= 0) caseCode |= 64;
-                        if (zList.Samples[x+1,y+1,z+1] <= 0) caseCode |= 128;
+                        if (!zList.SampleSigns[x  ,y  ,z  ]) caseCode |= 1;
+                        if (!zList.SampleSigns[x  ,y  ,z+1]) caseCode |= 2;
+                        if (!zList.SampleSigns[x  ,y+1,z  ]) caseCode |= 4;
+                        if (!zList.SampleSigns[x  ,y+1,z+1]) caseCode |= 8;
+                        if (!zList.SampleSigns[x+1,y  ,z  ]) caseCode |= 16;
+                        if (!zList.SampleSigns[x+1,y  ,z+1]) caseCode |= 32;
+                        if (!zList.SampleSigns[x+1,y+1,z  ]) caseCode |= 64;
+                        if (!zList.SampleSigns[x+1,y+1,z+1]) caseCode |= 128;
 
 						
 						if(caseCode == 0 || caseCode == 255) continue;
@@ -197,115 +197,6 @@ namespace SE.DC
 					}
 				}
 			}
-			return cellInfos;
-		}
-
-		public static CellInfo[,,] GenVerticesZList(Z.ZList zList) {
-			Z.Crossing[,,][] voxels = zList.Voxelize();  
-			int res = zList.Resolution - 1;
-			CellInfo[,,] cellInfos = new CellInfo[res, res, res];
-
-			for(int x = 0; x < res; x++) {
-				for(int y = 0; y < res; y++) {
-					for(int z = 0; z < res; z++) {
-						for(int i = 0; i < 3; i++) {
-							if(voxels[x,y,z][i].Z != 0) {
-								//Debug.Log("Crossing at (" + x + ", " + y + ", " + z + ", i" + i + "): " + " Z" + voxels[x,y,z][i].Z + ", N" + voxels[x,y,z][i].Normal);
-							}
-						}
-					}
-				}
-			}
-
-			int numCrossings = 0;
-			int numFoundCrossings = 0;
-
-			for(int x = 0; x < res; x++) {
-				for(int y = 0; y < res; y++) {
-					for(int z = 0; z < res; z++) {
-						int caseCode = 0;
-						for(int i = 0; i < 8; i++) {
-							Vector3Int offset = DCC.vioffsets[i];
-
-							if (zList.Samples[offset.x + x, offset.y + y, offset.z + z] < 0) { caseCode |= (byte)(1 << i); }
-						}
-						if(caseCode == 0 || caseCode == 255) continue;
-
-						Vector3[] cpositions = new Vector3[4];
-						Vector3[] cnormals = new Vector3[4];
-						int edgeCount = 0;
-						for (int i = 0; i < 12 && edgeCount < 4; i++)
-						{
-							byte c1 = (byte)DCC.edgevmap[i][0];
-							byte c2 = (byte)DCC.edgevmap[i][1];
-
-							Vector3 p1 = new Vector3(x, y, z) + DCC.vfoffsets[c1];
-							Vector3 p2 = new Vector3(x, y, z) + DCC.vfoffsets[c2];
-
-							bool m1 = ((caseCode >> c1) & 1) == 1;
-							bool m2 = ((caseCode >> c2) & 1) == 1;
-
-
-							if (m1 != m2)
-							{
-								int[] offind = DCC.edgevmaphermite[i];
-								Vector3Int ind0 = DCC.vioffsets[offind[0]] + new Vector3Int(x, y, z);
-								int ind1 = offind[1];
-
-								//Debug.Log("ind0: " + ind0 + ", ind1: " + ind1);
-								Z.Crossing[] cs = voxels[ind0.x, ind0.y, ind0.z];
-								Z.Crossing c = cs[ind1];
-								numCrossings++;
-
-								//Debug.Log("ind1: " + ind1);
-
-								//Debug.Log("Crossing: " + c.Z + ", "  + c.Normal);
-								if(c.Z != 0) numFoundCrossings++;
-
-								cpositions[edgeCount] = ind0;
-								if(ind1 == 0) cpositions[edgeCount].x = 0;
-								if(ind1 == 1) cpositions[edgeCount].y = 0;
-								if(ind1 == 2) cpositions[edgeCount].z = 0;
-								cpositions[edgeCount] += c.Z * DCC.vfdirs[ind1];
-
-								cnormals[edgeCount] = c.Normal;
-								edgeCount++;
-							}
-						}
-
-						if (edgeCount == 0) continue;
-
-						CellInfo cellInfo = new CellInfo();
-						QEF.QEFSolver qef = new QEF.QEFSolver();
-						for (int i = 0; i < edgeCount; i++)
-						{
-							qef.Add(cpositions[i], cnormals[i]);
-						}
-						cellInfo.Position = qef.Solve(0.0001f, 4, 0.0001f);
-						//drawInfo.index = vertices.Count;
-
-						Vector3 max = new Vector3(x, y, z) + Vector3.one;
-						if (cellInfo.Position.x < x || cellInfo.Position.x > max.x ||
-							cellInfo.Position.y < y || cellInfo.Position.y > max.y ||
-							cellInfo.Position.z < z || cellInfo.Position.z > max.z)
-						{
-							cellInfo.Position = qef.MassPoint;
-						}
-
-						//vertices.Add(drawInfo.position);
-
-						for (int i = 0; i < edgeCount; i++)
-						{
-							cellInfo.Normal += cnormals[i];
-						}
-						cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
-						//normals.Add(drawInfo.averageNormal);
-						cellInfo.Corners = (byte)caseCode;
-						cellInfos[x, y, z] = cellInfo;
-					}
-				}
-			}
-			Debug.Log("Num crossings: " + numCrossings + ", numFoundCrossings: " + numFoundCrossings);	
 			return cellInfos;
 		}
 
