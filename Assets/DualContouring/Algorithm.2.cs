@@ -135,10 +135,10 @@ namespace SE.DC
 					foreach(Z.Crossing c in zList.Rays[0][y,z].Crossings) {
 						int x = c.Index;
 						Vector3 position = new Vector3(c.Z, y, z);
-						if(y < resm1 && z < resm1) qefs[x,y,z].Add(position, c.Normal);
-						if(y - 1 >= 0 && z - 1 >= 0) qefs[x,y-1,z-1].Add(position, c.Normal);
-						if(y < resm1 && z - 1 >= 0) qefs[x,y,z-1].Add(position, c.Normal);
-						if(y - 1 >= 0 && z < resm1) qefs[x,y-1,z].Add(position, c.Normal);
+						if(y < resm1 && z < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(position, c.Normal);
+						if(y - 1 >= 0 && z - 1 >= 0 && qefs[x,y-1,z-1] != null) qefs[x,y-1,z-1].Add(position, c.Normal);
+						if(y < resm1 && z - 1 >= 0 && qefs[x,y,z-1] != null) qefs[x,y,z-1].Add(position, c.Normal);
+						if(y - 1 >= 0 && z < resm1 && qefs[x,y-1,z] != null) qefs[x,y-1,z].Add(position, c.Normal);
 					}
 				}
 			}
@@ -147,10 +147,10 @@ namespace SE.DC
 					foreach(Z.Crossing c in zList.Rays[1][x,z].Crossings) {
 						int y = c.Index;
 						Vector3 position = new Vector3(x, c.Z, z);
-						if(x < resm1 && z < resm1) qefs[x,y,z].Add(position, c.Normal);
-						if(x - 1 >= 0 && z - 1 >= 0) qefs[x-1,y,z-1].Add(position, c.Normal);
-						if(x < resm1 && z - 1 >= 0) qefs[x,y,z-1].Add(position, c.Normal);
-						if(x - 1 >= 0 && z < resm1) qefs[x-1,y,z].Add(position, c.Normal);
+						if(x < resm1 && z < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(position, c.Normal);
+						if(x - 1 >= 0 && z - 1 >= 0 && qefs[x-1,y,z-1] != null) qefs[x-1,y,z-1].Add(position, c.Normal);
+						if(x < resm1 && z - 1 >= 0 && qefs[x,y,z-1] != null) qefs[x,y,z-1].Add(position, c.Normal);
+						if(x - 1 >= 0 && z < resm1 && qefs[x-1,y,z] != null) qefs[x-1,y,z].Add(position, c.Normal);
 					}
 				}
 			}
@@ -159,10 +159,10 @@ namespace SE.DC
 					foreach(Z.Crossing c in zList.Rays[2][x,y].Crossings) {
 						int z = c.Index;
 						Vector3 position = new Vector3(x, y, c.Z);
-						if(x < resm1 && y < resm1) qefs[x,y,z].Add(new Vector3(x, y, c.Z), c.Normal);
-						if(x - 1 >= 0 && y - 1 >= 0) qefs[x-1,y-1,z].Add(position, c.Normal);
-						if(x < resm1 && y - 1 >= 0) qefs[x,y-1,z].Add(position, c.Normal);
-						if(x - 1 >= 0 && y < resm1) qefs[x-1,y,z].Add(position, c.Normal);
+						if(x < resm1 && y < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(new Vector3(x, y, c.Z), c.Normal);
+						if(x - 1 >= 0 && y - 1 >= 0 && qefs[x-1,y-1,z] != null) qefs[x-1,y-1,z].Add(position, c.Normal);
+						if(x < resm1 && y - 1 >= 0 && qefs[x,y-1,z] != null) qefs[x,y-1,z].Add(position, c.Normal);
+						if(x - 1 >= 0 && y < resm1 && qefs[x-1,y,z] != null) qefs[x-1,y,z].Add(position, c.Normal);
 					}
 				}
 			}

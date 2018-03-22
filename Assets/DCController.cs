@@ -24,8 +24,8 @@ public class DCController : MonoBehaviour {
 		Shader.SetGlobalInt("_ChunkResolution", Resolution);
 		Shader.SetGlobalInt("_ChunkMinimumSize", MinimumChunkSize);
 
-		DualContouringTest();
-		//queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
+		//DualContouringTest();
+		queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
 	}
 	
 
@@ -35,7 +35,7 @@ public class DCController : MonoBehaviour {
 		if(Input.GetKeyDown(KeyCode.U)) {
 			DualContouringTest();
 		}
-		//queuer.Update();
+		queuer.Update();
 		Vector3 pos = Camera.GetComponent<Transform>().position;
 		Shader.SetGlobalVector("_ViewerPosition", new Vector4(pos.x, pos.y, pos.z, 0));
 		//wrapper.Update(Camera.GetComponent<Transform>().position);
@@ -53,17 +53,30 @@ public class DCController : MonoBehaviour {
 		zList.Fill(UtilFuncs.FlatGround);
 
 		SE.Z.ZList zListB = new SE.Z.ZList(Resolution + 1);
-		zListB.Fill(UtilFuncs.Sphere);
+		zListB.Fill((x, y, z) => UtilFuncs.Sphere(x, y + 5, z));
 
 		zList.AddZList(zListB);
 
+		SE.Z.ZList zListC = new SE.Z.ZList(Resolution + 1);
+		zListC.Fill((x, y, z) => Mathf.Min(UtilFuncs.Sphere(x, y + 5, z), UtilFuncs.FlatGround(x, y, z)));
+
+		zList.CheckSampleSignsEqual(zListC);
+
+		Chunks.Chunk chunkB = new Chunks.Chunk();
+
 		SE.DC.Algorithm2.Run(zList, chunk);
+		//SE.DC.Algorithm2.Run(zListB, chunkB);
 
 		if(chunk.Triangles.Length == 0) {
 			return;
 		}
 
+		Meshify(chunk);
+		//Meshify(chunkB);
 		//Debug.Log("Uploading chunk...");
+	}
+
+	GameObject Meshify(Chunks.Chunk chunk) {
         GameObject clone = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
         Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
         clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
@@ -83,8 +96,8 @@ public class DCController : MonoBehaviour {
         clone.GetComponent<Transform>().SetPositionAndRotation(chunk.Position, Quaternion.identity);
 		clone.GetComponent<Transform>().localScale = Vector3.one * ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
 		chunk.UnityObject = clone;
+		return clone;
 	}
-
 
 	void OnDrawGizmos() {
 		if(queuer != null) {

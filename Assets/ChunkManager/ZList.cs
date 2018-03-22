@@ -218,8 +218,8 @@ public class ZList {
 			A.Crossings.Add(c);
 		}
 		A.Crossings.Sort((Crossing cA, Crossing cB) => {
-			if(cA.Z > cB.Z) { return -1; }
-			else if(cB.Z > cA.Z) { return 1; }
+			if(cA.Z < cB.Z) { return -1; }
+			else if(cA.Z > cB.Z) { return 1; }
 			return 0;
 		});
 		MergeRegion(A, raydir);
@@ -234,17 +234,20 @@ public class ZList {
 		}
 		A.Crossings.Sort((Crossing cA, Crossing cB) => {
 			if(cA.Z < cB.Z) { return -1; }
-			else if(cB.Z < cA.Z) { return 1; }
+			else if(cA.Z > cB.Z) { return 1; }
 			return 0;
 		});
 		MergeRegion(A, raydir);
 	}
 
 	public static void MergeRegion(Ray R, Vector3 raydir) {
+		Debug.Log("MergeRegion called");
 		int level = 0;
 		List<Crossing> T = new List<Crossing>();
-		foreach(Crossing c in R.Crossings) {
-			if(Vector3.Dot(raydir, c.Normal) < 0) {
+
+		for(int i = 0; i < R.Crossings.Count; i++) {
+			Crossing c = R.Crossings[i];
+			if(Vector3.Dot(c.Normal, raydir) < 0) {
 				level -= 1;
 				if(level == 0) {
 					T.Add(c);
@@ -260,13 +263,24 @@ public class ZList {
 		R.Crossings = T;
 	}
 	
+	public static void CleanRegion(Ray R) {
+		int[] indexCounts = new int[128];
+
+		for(int i = 0; i < R.Crossings.Count; i++) {
+			Crossing c = R.Crossings[i];
+			indexCounts[c.Index]++;
+		}
+
+		
+	}
+
 	public void AddZList(ZList zListB) {
 		Debug.Assert(zListB.Resolution == Resolution);
 
 		for(int x = 0; x < Resolution; x++) {
 			for(int y = 0; y < Resolution; y++) {
 				for(int z = 0; z < Resolution; z++) {
-					SampleSigns[x,y,z] = SampleSigns[x,y,z] || zListB.SampleSigns[x,y,z];
+					SampleSigns[x,y,z] = SampleSigns[x,y,z] && zListB.SampleSigns[x,y,z];
 				}
 			}
 		}
@@ -282,8 +296,40 @@ public class ZList {
 			}
 		}
 
+		EnsureZListValid();
 	}
 
+	public void EnsureZListValid() {
+		for(int rayDir = 0; rayDir < 3; rayDir++) {
+			Vector3 dir = SE.DC.DCC.vfdirs[0];
+			for(int c1 = 0; c1 < Resolution; c1++) {
+				for(int c2 = 0; c2 < Resolution; c2++) {
+					List<int> UsedIndices = new List<int>();
+					Ray A = Rays[rayDir][c1,c2];
+
+					foreach(Crossing c in A.Crossings) {
+						Debug.Assert(!UsedIndices.Contains(c.Index), "ZList invalid; multiple rays on edge.");
+						UsedIndices.Add(c.Index);
+					}
+				}
+			}
+		}
+	}
+
+	public bool CheckSampleSignsEqual(ZList zListB) {
+		for(int x = 0; x < Resolution; x++) {
+			for(int y = 0; y < Resolution; y++) {
+				for(int z = 0; z < Resolution; z++) {
+					if(SampleSigns[x,y,z] != zListB.SampleSigns[x,y,z]) {
+						Debug.Log("Sample sign different at " + new Vector3(x, y, z) + ", original sign: " + SampleSigns[x,y,z] + ", compared sign: " + zListB.SampleSigns[x,y,z]);
+						return false;
+					}
+				}
+			}
+		}
+		Debug.Log("Sample signs are equal");
+		return true;
+	}
 
 }
 }
