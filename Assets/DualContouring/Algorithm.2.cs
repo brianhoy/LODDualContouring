@@ -69,8 +69,7 @@ namespace SE.DC
 			chunk.State = Chunks.ChunkState.Blank; 
 
 			sw.Stop();
-			Debug.Log("Uniform dual contouring time for " + resolution + "^3 mesh: " + (genVertsTime + genVertsLod1Time + genIndicesTime) + "ms" + 
-				"(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
+			//Debug.Log("Uniform dual contouring time for " + resolution + "^3 mesh: " + (genVertsTime + genVertsLod1Time + genIndicesTime) + "ms" + "(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
 		public static Mesh Run(SE.Z.ZList zList, Chunks.Chunk chunk) {

@@ -60,7 +60,7 @@ public class DCController : MonoBehaviour {
 		SE.Z.ZList zListC = new SE.Z.ZList(Resolution + 1);
 		zListC.Fill((x, y, z) => Mathf.Min(UtilFuncs.Sphere(x, y + 5, z), UtilFuncs.FlatGround(x, y, z)));
 
-		zList.CheckSampleSignsEqual(zListC);
+		//zList.CheckSampleSignsEqual(zListC);
 
 		Chunks.Chunk chunkB = new Chunks.Chunk();
 

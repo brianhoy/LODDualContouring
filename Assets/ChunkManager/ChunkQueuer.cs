@@ -33,6 +33,7 @@ public class ChunkQueuer {
 	private Transform Parent;
 	private GameObject ChunkPrefab;
 	private CObjectPool<GameObject> UnityObjectPool;
+	private bool Busy;
 
 	private int LODs;
 	private int Resolution;
@@ -70,8 +71,14 @@ public class ChunkQueuer {
 	}
 
 	public void Update() {
+		UploadChunks();
+		if(Busy) {
+			return;
+		}
+
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
+
 
 		Vector3 pos = Viewer.position;
 		float updateTime = Time.realtimeSinceStartup;
@@ -176,7 +183,6 @@ public class ChunkQueuer {
 
 		Initialized = true;
 		MeshChunks();
-		UploadChunks();
 	}
 
 	public static int getChunkHash(Vector3Int position, int LOD) {
@@ -191,60 +197,73 @@ public class ChunkQueuer {
 	}
 
 	public void MeshChunks() {
-		Parallel.ForEach(ChunksToMesh, (chunk) => {
-			UtilFuncs.Sampler sampleFn = (float x, float y, float z) => {
-				float scaleFactor = ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
-				x *= scaleFactor; 
-				y *= scaleFactor; 
-				z *= scaleFactor;
-				x += chunk.Position.x; 
-				y += chunk.Position.y; 
-				z += chunk.Position.z;
+		Task.Factory.StartNew(() => {
+			Busy = true;
+			Parallel.ForEach(ChunksToMesh, (chunk) => {
+				UtilFuncs.Sampler sampleFn = (float x, float y, float z) => {
+					float scaleFactor = ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
+					x *= scaleFactor; 
+					y *= scaleFactor; 
+					z *= scaleFactor;
+					x += chunk.Position.x; 
+					y += chunk.Position.y; 
+					z += chunk.Position.z;
 
-				return UtilFuncs.Sample(x/Resolution, y/Resolution, z/Resolution);
-			};
-			SE.DC.Algorithm2.Run(Resolution, sampleFn, chunk);
-			ChunksToUpload.Add(chunk);
-			//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
+					return UtilFuncs.Sample(x/Resolution, y/Resolution, z/Resolution);
+				};
+				SE.DC.Algorithm2.Run(Resolution, sampleFn, chunk);
+				ChunksToUpload.Add(chunk);
+				//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
+			});
+			ChunksToMesh = new ConcurrentBag<Chunk>();
+			Busy = false;
 		});
-		ChunksToMesh = new ConcurrentBag<Chunk>();
 	}
 
 	public void UploadChunks() {
-		UConsole.Print("Uploading chunks... Queue size: " + ChunksToUpload.Count);
-		foreach(Chunk chunk in ChunksToUpload) {
-			UploadChunk(chunk);
+		while(ChunksToUpload.Count > 0) {
+			Chunk chunk;
+			if(ChunksToUpload.TryTake(out chunk)) {
+				//UConsole.Print("Uploading chunk. ");
+				UploadChunk(chunk);
+			}
+
 		}
-		ChunksToUpload = new ConcurrentBag<Chunk>();
 	}
 
 	public void UploadChunk(Chunk chunk) {
+		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+		sw.Start();
+
 		if(chunk.Triangles.Length == 0) {
 			return;
 		}
 
 		//Debug.Log("Uploading chunk...");
 		chunk.State = ChunkState.Uploading;
-        GameObject clone = UnityObjectPool.GetObject();
-        Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
-        clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
+		GameObject clone = UnityObjectPool.GetObject();
+		Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
+		clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
 		clone.GetComponent<MeshRenderer>().material.SetInt("_LOD", chunk.LOD);
 		clone.GetComponent<MeshRenderer>().material.SetVector("_ChunkPosition", new Vector4(chunk.Position.x, chunk.Position.y, chunk.Position.z));
 
-        clone.name = "Node " + chunk.Key + ", LOD " + chunk.LOD;
-        
-        MeshFilter mf = clone.GetComponent<MeshFilter>();
+		clone.name = "Node " + chunk.Key + ", LOD " + chunk.LOD;
+
+		MeshFilter mf = clone.GetComponent<MeshFilter>();
 		mf.mesh.SetVertices(chunk.Vertices);
 		mf.mesh.SetNormals(chunk.Normals);
 		mf.mesh.SetUVs(0, chunk.LOD1Vertices);
 		mf.mesh.SetUVs(1, chunk.LOD1Normals);
 		mf.mesh.triangles = chunk.Triangles;
 
-        clone.GetComponent<Transform>().SetParent(Parent);
-        clone.GetComponent<Transform>().SetPositionAndRotation(chunk.Position, Quaternion.identity);
+		clone.GetComponent<Transform>().SetParent(Parent);
+		clone.GetComponent<Transform>().SetPositionAndRotation(chunk.Position, Quaternion.identity);
 		clone.GetComponent<Transform>().localScale = Vector3.one * ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
 		chunk.State = ChunkState.Completed;
 		chunk.UnityObject = clone;
+
+		sw.Stop();
+		//Debug.Log("Uploading mesh took " + sw.ElapsedMilliseconds + "ms");
 	}
 
 	public void DrawGizmos() {

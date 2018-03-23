@@ -28,9 +28,12 @@ public static class UtilFuncs {
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 
-        float r = 0.5f;
+        float r = 0.03134f;
 		float result = 0f;
         float ground = -1.5f + y; 
+
+        float noise = SE.Perlin.Noise(x * r, z * r) * 20;
+        ground -= noise;
 
 		float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
 		//Debug.Log("Cuboid result: " + res);
