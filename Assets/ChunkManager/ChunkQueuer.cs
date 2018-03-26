@@ -12,7 +12,6 @@ public class Chunk {
 	public float CreationTime;
 	public int LOD; // minimum: 0
 	public Vector4 Key;
-	public Vector4 Key2;
 	public int LinearArrayIndex;
 
 	public ChunkState State;
@@ -67,7 +66,7 @@ public class ChunkQueuer {
 		this.ChunkPrefab = ChunkPrefab;
 
 		LODBounds = new Bounds[4];
-		ChunkArraySize = 4 * Radius + 2;
+		ChunkArraySize = 4 * Radius;
 		ChunkStorage = new Chunk[LODs][,,];
 		ChunkLinearArrayMin = 0;
 		ChunkLinearArrayMax = 0;
@@ -102,6 +101,24 @@ public class ChunkQueuer {
 		//MeshChunks();
 	}
 
+	public void PrintArraySlice() {
+		string msg = "";
+		for(int y = 0; y < ChunkArraySize; y++) {
+			msg += "[";
+			for(int x = 0; x < ChunkArraySize; x++) {
+				if(ChunkStorage[0][x,y,1] != null) {
+					msg += "c ";
+				}
+				else {
+					msg += "0 ";
+				}
+			}
+			msg += "]\n";
+		}
+		msg += "";
+		Debug.Log(msg);
+	}
+
 	public void DoChunkUpdate() {
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
@@ -128,9 +145,9 @@ public class ChunkQueuer {
 									(int)Mathf.Floor(pos.z/snapSize)) * snapSize;
 
 			Vector3Int posOffset = new Vector3Int(
-									(int)Mathf.Floor(pos.x/chunkSize), 
-									(int)Mathf.Floor(pos.y/chunkSize), 
-									(int)Mathf.Floor(pos.z/chunkSize));
+									(int)Mathf.Floor(pos.x/(float)chunkSize), 
+									(int)Mathf.Floor(pos.y/(float)chunkSize), 
+									(int)Mathf.Floor(pos.z/(float)chunkSize));
 
 			if(LOD == 0) {
 				if(Initialized && snappedViewerPosition == PreviousPosition) {
@@ -149,12 +166,9 @@ public class ChunkQueuer {
 						Vector3Int localCoords = itPos * chunkSize - vChunkSize;
 						Vector3Int cpos = snappedViewerPosition + localCoords;
 
-						int arrx = mod((x + posOffset.x), ChunkArraySize);
-						int arry = mod((y + posOffset.y), ChunkArraySize);
-						int arrz = mod((z + posOffset.z), ChunkArraySize);
-
-						Debug.Log("arrx, arry, arrz: " + arrx + ", " + arry + ", " + arrz + ", ChunkArraySize: " + ChunkArraySize);
-
+						if(LOD != 0 && previousLodBounds.Contains(cpos)) {
+							continue;
+						}
 						if(x == minCoord && y == minCoord && z == minCoord) {
 							minExtents = cpos;
 						}
@@ -162,49 +176,30 @@ public class ChunkQueuer {
 							maxExtents = cpos;
 						}
 
+						int arrx = mod(cpos.x/chunkSize, ChunkArraySize);
+						int arry = mod(cpos.y/chunkSize, ChunkArraySize);
+						int arrz = mod(cpos.z/chunkSize, ChunkArraySize);
 
-						if(LOD != 0 && previousLodBounds.Contains(cpos)) {
-							continue;
-						}
-						Vector4 key = new Vector4(cpos.x, cpos.y, cpos.z, LOD);
-						Vector4 key2 = new Vector4(arrx, arry, arrz, LOD);
+						Vector4 key = new Vector4(arrx, arry, arrz, LOD);
 
-						if(ChunkStorage[LOD][arrx,arry,arrz] != null) {
-							ChunkStorage[LOD][arrx,arry,arrz].CreationTime = updateTime;
-						}
-						else {
+						if(ChunkStorage[LOD][arrx,arry,arrz] == null) {
+							Debug.Assert(!Chunks.ContainsKey(key));
+
 							Chunk chunk = new Chunk();
 
 							numChunksAdded++;
 							chunk.Position = cpos;
 							chunk.Key = key;
-							chunk.Key2 = key2;
 							chunk.LOD = LOD;
 							chunk.CreationTime = updateTime;
 							chunk.State = ChunkState.Blank;
 							chunk.LinearArrayIndex = ChunkLinearArrayMax++;
 							ChunkStorage[LOD][arrx,arry,arrz] = chunk;
-							Chunks.Add(key, chunk);
-							ChunksToMesh.Add(chunk);
 							ChunkLinearArray[chunk.LinearArrayIndex] = chunk;
-						}
-						
-
-						if(Chunks.ContainsKey(key)) {
-							var chunk = (Chunks[key] as Chunk);
-							chunk.CreationTime = updateTime;
+							ChunksToMesh.Add(chunk);
 						}
 						else {
-							Chunk chunk = new Chunk();
-
-							numChunksAdded++;
-							chunk.Position = cpos;
-							chunk.Key = key;
-							chunk.LOD = LOD;
-							chunk.CreationTime = updateTime;
-							chunk.State = ChunkState.Blank;
-							Chunks.Add(key, chunk);
-							ChunksToMesh.Add(chunk);
+							ChunkStorage[LOD][arrx,arry,arrz].CreationTime = updateTime;
 						}
 					}
 				}
@@ -216,25 +211,30 @@ public class ChunkQueuer {
 
 		long ElapsedMilliseconds1 = sw.ElapsedMilliseconds;
 		sw.Restart();
-
+		//PrintArraySlice();
 		Debug.Log("Added " + numChunksAdded + " chunks.");
 
-		Hashtable newChunkTable = new Hashtable();
-		foreach(Chunk chunk in Chunks.Values) {
-			if(chunk.CreationTime == updateTime) {
-				newChunkTable.Add(chunk.Key, chunk);
-			}
-			else {
-				//Debug.Log("Deleting chunk at " + chunk.Position);
-				if(chunk.UnityObject != null) {
-					ObjectsToClear.Add(chunk.UnityObject);
-					//chunk.
-					//UnityEngine.Object.Destroy(chunk.UnityObject);
+		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
+			Chunk c = ChunkLinearArray[i];
+			if(c != null) {
+				if(c.CreationTime != updateTime) {
+					ChunkLinearArray[i] = null;
+					ChunkStorage[(int)c.Key.w][(int)c.Key.x,(int)c.Key.y,(int)c.Key.z] = null;
+					if(c.UnityObject != null) {
+						UnityObjectPool.PutObject(ref c.UnityObject);
+						c.UnityObject.GetComponent<MeshFilter>().mesh.Clear();
+					}
+					c.State = ChunkState.Cancelled;
 				}
-				chunk.State = ChunkState.Cancelled;
 			}
 		}
-		Chunks = newChunkTable;
+
+		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
+			if(ChunkLinearArray[i] != null) {
+				ChunkLinearArrayMin = i;
+				break;
+			}
+		}
 
 		long ElapsedMilliseconds2 = sw.ElapsedMilliseconds;
 		string msg = "Chunk Coordinates Update: Stage 1 took " + ElapsedMilliseconds1 + "ms, Stage 2 took " + ElapsedMilliseconds2 + "ms, total is " + (ElapsedMilliseconds1 + ElapsedMilliseconds2) + "ms";
@@ -354,9 +354,12 @@ public class ChunkQueuer {
 	}
 
 	public void DrawGizmos() {
-		foreach(Chunk chunk in Chunks.Values) {
-			Gizmos.color = UtilFuncs.SinColor(chunk.LOD * 3f);
-			Gizmos.DrawSphere(chunk.Position, chunk.LOD + 0.5f);
+		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
+			if(ChunkLinearArray[i] != null) {
+				Chunk chunk = ChunkLinearArray[i];
+				Gizmos.color = UtilFuncs.SinColor(chunk.LOD * 3f);
+				Gizmos.DrawSphere(chunk.Position, chunk.LOD + 0.5f);
+			}
 		}
 	}
 
