@@ -11,7 +11,7 @@ public class Chunk {
 	public Vector3Int Position;
 	public float CreationTime;
 	public int LOD; // minimum: 0
-	public Vector4 Key;
+	public Vector4Int Key;
 	public int LinearArrayIndex;
 
 	public ChunkState State;
@@ -30,8 +30,6 @@ public class ChunkQueuer {
 	private ConcurrentBag<Chunk> ChunksToMesh;
 	private ConcurrentBag<Chunk> ChunksToUpload;
 	private ConcurrentBag<GameObject> ObjectsToClear;
-
-	private Hashtable Chunks;
 
 	private Chunk[][,,] ChunkStorage;
 	private Chunk[] ChunkLinearArray;
@@ -52,8 +50,6 @@ public class ChunkQueuer {
 	private bool Initialized;
 	private Vector3Int PreviousPosition;
 
-	private Bounds[] LODBounds;
-
 	public ChunkQueuer(Transform Viewer, Transform Parent, int LODs, int Resolution, int Radius, int MinimumChunkSize, GameObject ChunkPrefab) {
 		Debug.Assert(LODs >= 1);
 		this.Viewer = Viewer;
@@ -65,7 +61,6 @@ public class ChunkQueuer {
 		this.Initialized = false;
 		this.ChunkPrefab = ChunkPrefab;
 
-		LODBounds = new Bounds[4];
 		ChunkArraySize = 4 * Radius;
 		ChunkStorage = new Chunk[LODs][,,];
 		ChunkLinearArrayMin = 0;
@@ -84,21 +79,26 @@ public class ChunkQueuer {
 		ChunksToMesh = new ConcurrentBag<Chunk>();
 		ChunksToUpload = new ConcurrentBag<Chunk>();
 		ObjectsToClear = new ConcurrentBag<GameObject>();
-		Chunks = new Hashtable();
-		ChunkLinearArray = new Chunk[ChunkArraySize*ChunkArraySize*ChunkArraySize * 50];
+		ChunkLinearArray = new Chunk[ChunkArraySize*ChunkArraySize*ChunkArraySize * 500];
 		AddCommands();
 	}
 
 	public void Update() {
+		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+		sw.Start();
+
 		//ClearObjects();
-		//UploadChunks();
-		if(Busy) {
-			return;
+		UploadChunks();
+		if(!Busy) {
+			DoChunkUpdate();
+			MeshChunks();		
 		}
 
-		DoChunkUpdate();
-
-		//MeshChunks();
+		sw.Stop();
+		double elapsed = sw.Elapsed.Milliseconds;
+		if(elapsed > 3) {
+			Debug.Log("Update took " + elapsed + " ms.");
+		}
 	}
 
 	public void PrintArraySlice() {
@@ -129,62 +129,85 @@ public class ChunkQueuer {
 		int numChunksAdded = 0;
 		int minCoord = -Radius + 1;
 		int maxCoord = Radius + 1;
-		BoundsInt previousLodBounds = new BoundsInt();
+
+		int prevLodBoundXMin = 0;
+		int prevLodBoundXMax = 0;
+		int prevLodBoundYMin = 0;
+		int prevLodBoundYMax = 0;
+		int prevLodBoundZMin = 0;
+		int prevLodBoundZMax = 0;
 
 		for(int LOD = 0; LOD < LODs; LOD++) {
 			int scale = (int)Mathf.Pow(2, LOD);
 			int chunkSize = MinimumChunkSize * scale;
 			int snapSize = chunkSize * 2;
 
-			Vector3Int minExtents = Vector3Int.zero;
-			Vector3Int maxExtents = Vector3Int.zero;
 
-			Vector3Int snappedViewerPosition = new Vector3Int(
-									(int)Mathf.Floor(pos.x/snapSize), 
-									(int)Mathf.Floor(pos.y/snapSize), 
-									(int)Mathf.Floor(pos.z/snapSize)) * snapSize;
+			int minX = 0;
+			int minY = 0;
+			int minZ = 0;
 
-			Vector3Int posOffset = new Vector3Int(
-									(int)Mathf.Floor(pos.x/(float)chunkSize), 
-									(int)Mathf.Floor(pos.y/(float)chunkSize), 
-									(int)Mathf.Floor(pos.z/(float)chunkSize));
+			int maxX = 0;
+			int maxY = 0;
+			int maxZ = 0;
+
+			int snappedViewerX = (int)Mathf.Floor(pos.x/snapSize) * snapSize;
+			int snappedViewerY = (int)Mathf.Floor(pos.y/snapSize) * snapSize;
+			int snappedViewerZ = (int)Mathf.Floor(pos.z/snapSize) * snapSize;
+
+			Vector3Int snappedViewerPosition = new Vector3Int(snappedViewerX, snappedViewerY, snappedViewerZ);
 
 			if(LOD == 0) {
 				if(Initialized && snappedViewerPosition == PreviousPosition) {
-					Busy = false;
 					return;
 				}
 				PreviousPosition = snappedViewerPosition;
 			}
 
-			Vector3Int vChunkSize = Vector3Int.one * chunkSize;
+			{ // setting min bounds for next lod
+				int cposx = ((minCoord - 1) * chunkSize) + snappedViewerX;
+				int cposy = ((minCoord - 1) * chunkSize) + snappedViewerY;
+				int cposz = ((minCoord - 1) * chunkSize) + snappedViewerZ;
+
+				minX = cposx;
+				minY = cposy;
+				minZ = cposz;
+			}
+			{ // setting max bounds for next lod
+				int cposx = ((maxCoord - 2) * chunkSize) + snappedViewerX;
+				int cposy = ((maxCoord - 2) * chunkSize) + snappedViewerY;
+				int cposz = ((maxCoord - 2) * chunkSize) + snappedViewerZ;
+
+				maxX = cposx;
+				maxY = cposy;
+				maxZ = cposz;
+			}
+
 
 			for(int x = minCoord; x < maxCoord; x++) {
+				int cposx = ((x - 1) * chunkSize) + snappedViewerX;
+				bool xInBounds = cposx >= prevLodBoundXMin && cposx <= prevLodBoundXMax;
+
 				for(int y = minCoord; y < maxCoord; y++) {
+					int cposy = ((y - 1) * chunkSize) + snappedViewerY;
+					bool yInBounds = cposy >= prevLodBoundYMin && cposy <= prevLodBoundYMax;
+
 					for(int z = minCoord; z < maxCoord; z++) {
-						Vector3Int itPos = new Vector3Int(x, y, z);
-						Vector3Int localCoords = itPos * chunkSize - vChunkSize;
-						Vector3Int cpos = snappedViewerPosition + localCoords;
+						int cposz = ((z - 1) * chunkSize) + snappedViewerZ;
+						bool zInBounds = cposz >= prevLodBoundZMin && cposz <= prevLodBoundZMax;
 
-						if(LOD != 0 && previousLodBounds.Contains(cpos)) {
-							continue;
-						}
-						if(x == minCoord && y == minCoord && z == minCoord) {
-							minExtents = cpos;
-						}
-						if(x == maxCoord - 1 && y == maxCoord - 1 && z == maxCoord - 1) {
-							maxExtents = cpos;
-						}
 
-						int arrx = mod(cpos.x/chunkSize, ChunkArraySize);
-						int arry = mod(cpos.y/chunkSize, ChunkArraySize);
-						int arrz = mod(cpos.z/chunkSize, ChunkArraySize);
+						if(LOD != 0 && (xInBounds && yInBounds && zInBounds)) { continue; }
 
-						Vector4 key = new Vector4(arrx, arry, arrz, LOD);
+						Vector3Int cpos = new Vector3Int(cposx, cposy, cposz);
+
+						int arrx = ((cpos.x/chunkSize)%ChunkArraySize + ChunkArraySize)%ChunkArraySize;
+						int arry = ((cpos.y/chunkSize)%ChunkArraySize + ChunkArraySize)%ChunkArraySize;
+						int arrz = ((cpos.z/chunkSize)%ChunkArraySize + ChunkArraySize)%ChunkArraySize;
+
+						Vector4Int key = new Vector4Int(arrx, arry, arrz, LOD);
 
 						if(ChunkStorage[LOD][arrx,arry,arrz] == null) {
-							Debug.Assert(!Chunks.ContainsKey(key));
-
 							Chunk chunk = new Chunk();
 
 							numChunksAdded++;
@@ -205,21 +228,23 @@ public class ChunkQueuer {
 				}
 			}
 
-			Vector3Int size = maxExtents - minExtents;
-			previousLodBounds = new BoundsInt(minExtents, size);
+			prevLodBoundXMax = maxX;
+			prevLodBoundXMin = minX;
+			prevLodBoundYMax = maxY;
+			prevLodBoundYMin = minY;
+			prevLodBoundZMax = maxZ;
+			prevLodBoundZMin = minZ;
 		}
 
-		long ElapsedMilliseconds1 = sw.ElapsedMilliseconds;
+		double ElapsedMilliseconds1 = sw.Elapsed.TotalMilliseconds;
 		sw.Restart();
-		//PrintArraySlice();
-		Debug.Log("Added " + numChunksAdded + " chunks.");
 
 		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
 			Chunk c = ChunkLinearArray[i];
 			if(c != null) {
 				if(c.CreationTime != updateTime) {
 					ChunkLinearArray[i] = null;
-					ChunkStorage[(int)c.Key.w][(int)c.Key.x,(int)c.Key.y,(int)c.Key.z] = null;
+					ChunkStorage[c.Key.w][c.Key.x,c.Key.y,c.Key.z] = null;
 					if(c.UnityObject != null) {
 						UnityObjectPool.PutObject(ref c.UnityObject);
 						c.UnityObject.GetComponent<MeshFilter>().mesh.Clear();
@@ -236,28 +261,14 @@ public class ChunkQueuer {
 			}
 		}
 
-		long ElapsedMilliseconds2 = sw.ElapsedMilliseconds;
-		string msg = "Chunk Coordinates Update: Stage 1 took " + ElapsedMilliseconds1 + "ms, Stage 2 took " + ElapsedMilliseconds2 + "ms, total is " + (ElapsedMilliseconds1 + ElapsedMilliseconds2) + "ms";
+		double ElapsedMilliseconds2 = sw.Elapsed.TotalMilliseconds;
+		string msg = "Chunk Update: S1 " + ElapsedMilliseconds1 + "ms, S2 " + ElapsedMilliseconds2 + "ms, Total " + (ElapsedMilliseconds1 + ElapsedMilliseconds2) + "ms (" + numChunksAdded + " chunks added)";
 
 		//UConsole.Print(msg);
-		Debug.Log(msg);
+		//Debug.Log(msg);
 		sw.Stop();
 		Initialized = true;
 
-	}
-	int mod(int x, int m) {
-		return (x%m + m)%m;
-	}
-
-	public static int getChunkHash(Vector3Int position, int LOD) {
-		int hash = position.x;
-		hash *= 1000003;
-		hash += position.y;
-		hash *= 1000003;
-		hash += position.z;
-		hash *= 1000003;
-		hash += LOD;
-		return hash;
 	}
 
 	public void ClearObjects() {
@@ -301,8 +312,8 @@ public class ChunkQueuer {
 
 	public void UploadChunks() {
 		int ct = ChunksToUpload.Count;
-		int amtuploading = 10;
-		if(ct < 10) {
+		int amtuploading = ct;
+		if(ct < amtuploading) {
 			amtuploading = ct;
 		}
 		while(amtuploading > 0) {
@@ -321,6 +332,9 @@ public class ChunkQueuer {
 	public void UploadChunk(Chunk chunk) {
 		//System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		//sw.Start();
+		if(chunk.State == ChunkState.Cancelled) {
+			return;
+		}
 
 		if(chunk.Triangles.Length == 0) {
 			return;
@@ -354,13 +368,13 @@ public class ChunkQueuer {
 	}
 
 	public void DrawGizmos() {
-		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
+		/*for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
 			if(ChunkLinearArray[i] != null) {
 				Chunk chunk = ChunkLinearArray[i];
 				Gizmos.color = UtilFuncs.SinColor(chunk.LOD * 3f);
 				Gizmos.DrawSphere(chunk.Position, chunk.LOD + 0.5f);
 			}
-		}
+		}*/
 	}
 
 	public void AddCommands() {

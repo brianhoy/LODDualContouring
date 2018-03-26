@@ -5,6 +5,16 @@ using Util;
 public static class UtilFuncs {
     public static SE.OpenSimplexNoise s = new SE.OpenSimplexNoise(7);
 
+	public static FastNoise myNoise; // Create a FastNoise object
+
+	static UtilFuncs() {
+		myNoise = new FastNoise();
+		myNoise.SetNoiseType(FastNoise.NoiseType.PerlinFractal);
+		myNoise.SetFractalOctaves(8);
+		
+
+	}
+
     public delegate float Sampler(float x, float y, float z);
 
 	public static float max = float.MinValue;
@@ -28,11 +38,11 @@ public static class UtilFuncs {
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 
-        float r = 0.03134f;
+        float r = 3f;
 		float result = 0f;
         float ground = -1.5f + y; 
 
-        float noise = SE.Perlin.Noise(x * r, z * r) * 20;
+        float noise = myNoise.GetNoise(x * r, z * r) * 50;
         ground -= noise;
 
 		float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
@@ -59,7 +69,9 @@ public static class UtilFuncs {
 		//result += res;
         return result;
     }
-
+	public static int mod(int x, int m) {
+		return (x%m + m)%m;
+	}
 	public static float RotatedCuboid(Vector3 q, float radius)
 	{
 		q = Matrix4x4.Rotate(Quaternion.Euler(45, 45, 45)).MultiplyVector(q);
@@ -143,6 +155,8 @@ namespace Util {
             }
         }
     }
+
+
     public struct GridCell {
         public Point[] points;
         public GridCell Clone() {
@@ -211,4 +225,20 @@ namespace Util {
 			return false;
 		}
 	}
+}
+
+namespace UnityEngine {
+	public struct Vector4Int {
+		public int x;
+		public int y;
+		public int z;
+		public int w;
+		public Vector4Int(int x, int y, int z, int w) {
+			this.x = x;
+			this.y = y;
+			this.z = z;
+			this.w = w;
+		}
+	}
+
 }
