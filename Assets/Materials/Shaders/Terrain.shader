@@ -51,8 +51,6 @@
 			morphAmount += clamp(0 + (_ViewerPosition.z - voxelPosition.z - chunkSize * (_ChunkRadius - 1)) / (chunkSize), 0, 1);
 
 			//o.customColor = float4((voxelPosition.x + 256) / 512.0, 0, 0, 1);
-			o.worldNormal = v.normal;
-			o.worldPos = worldPos;
 
 
 			morphAmount = clamp(morphAmount, 0.0, 1.0);
@@ -60,6 +58,9 @@
 			v.normal.xyz = (1 - morphAmount) * v.normal.xyz + morphAmount * v.texcoord1.xyz;
 
 			int3 middle = (localVoxelPosition + int3(1, 1, 1));
+			
+			o.worldNormal = v.normal;
+			o.worldPos = mul(unity_ObjectToWorld, v.vertex);
 
 			if(distance(v.vertex, middle) < 0.05) {
 				//o.customColor = float4(0, 1, 0, 0);
