@@ -33,47 +33,12 @@ public class DCController : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		if(Input.GetKeyDown(KeyCode.U)) {
-			DualContouringTest();
+			//DualContouringTest();
 		}
 		queuer.Update();
 		Vector3 pos = Camera.GetComponent<Transform>().position;
 		Shader.SetGlobalVector("_ViewerPosition", new Vector4(pos.x, pos.y, pos.z, 0));
 		//wrapper.Update(Camera.GetComponent<Transform>().position);
-	}
-
-	void DualContouringTest() {
-		Debug.Log("Dual contouring test running...");
-		if(testChunk != null) {
-			UnityEngine.Object.Destroy(testChunk.UnityObject);
-		}
-
-		Chunks.Chunk chunk = new Chunks.Chunk();
-		testChunk = chunk;
-		SE.Z.ZList zList = new SE.Z.ZList(Resolution+1);
-		zList.Fill(UtilFuncs.FlatGround);
-
-		SE.Z.ZList zListB = new SE.Z.ZList(Resolution + 1);
-		zListB.Fill((x, y, z) => UtilFuncs.Sphere(x, y + 5, z));
-
-		zList.AddZList(zListB);
-
-		SE.Z.ZList zListC = new SE.Z.ZList(Resolution + 1);
-		zListC.Fill((x, y, z) => Mathf.Min(UtilFuncs.Sphere(x, y + 5, z), UtilFuncs.FlatGround(x, y, z)));
-
-		//zList.CheckSampleSignsEqual(zListC);
-
-		Chunks.Chunk chunkB = new Chunks.Chunk();
-
-		SE.DC.Algorithm2.Run(zList, chunk);
-		//SE.DC.Algorithm2.Run(zListB, chunkB);
-
-		if(chunk.Triangles.Length == 0) {
-			return;
-		}
-
-		Meshify(chunk);
-		//Meshify(chunkB);
-		//Debug.Log("Uploading chunk...");
 	}
 
 	GameObject Meshify(Chunks.Chunk chunk) {

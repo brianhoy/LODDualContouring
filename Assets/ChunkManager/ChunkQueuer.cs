@@ -41,7 +41,12 @@ public class ChunkQueuer {
 	private Transform Parent;
 	private GameObject ChunkPrefab;
 	private CObjectPool<GameObject> UnityObjectPool;
+	
 	private bool Busy;
+	private bool MidChunkUpdate;
+	private bool DoneChunkUpdate;
+	private int NumChunksRemaining; // number of chunks remaining that need to be meshed + uploaded
+	private int NumChunksMeshed = 0;
 
 	private int LODs;
 	private int Resolution;
@@ -49,6 +54,9 @@ public class ChunkQueuer {
 	private int MinimumChunkSize;
 	private bool Initialized;
 	private Vector3Int PreviousPosition;
+
+	private List<Chunk> ChunksToClear;
+	private List<Chunk> ChunksToAppear;
 
 	public ChunkQueuer(Transform Viewer, Transform Parent, int LODs, int Resolution, int Radius, int MinimumChunkSize, GameObject ChunkPrefab) {
 		Debug.Assert(LODs >= 1);
@@ -74,11 +82,16 @@ public class ChunkQueuer {
 			
 			var obj = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
 			obj.GetComponent<MeshFilter>().mesh = new Mesh();
+			obj.GetComponent<Renderer>().enabled = false;	
 			return obj;
 		});
 		ChunksToMesh = new ConcurrentBag<Chunk>();
 		ChunksToUpload = new ConcurrentBag<Chunk>();
 		ObjectsToClear = new ConcurrentBag<GameObject>();
+
+		ChunksToAppear = new List<Chunk>();
+		ChunksToClear = new List<Chunk>();
+		
 		ChunkLinearArray = new Chunk[ChunkArraySize*ChunkArraySize*ChunkArraySize * 500];
 		AddCommands();
 	}
@@ -87,11 +100,23 @@ public class ChunkQueuer {
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
 
-		//ClearObjects();
-		UploadChunks();
-		if(!Busy) {
+		Debug.Log("Num chunks remaining: " + NumChunksRemaining + ", NumChunksMeshed: " + NumChunksMeshed);
+
+		if(NumChunksRemaining == 0) {
+			NumChunksRemaining = -1;
+			DoneChunkUpdate = true;
+		}
+
+		if(MidChunkUpdate) {
+			UploadChunks();		
+		}
+		else if(DoneChunkUpdate) { // happens when all chunks have been meshed + uploaded
+			DoneChunkUpdate = false;
+			ClearAndShowChunks();
+		}
+		else {
 			DoChunkUpdate();
-			MeshChunks();		
+			MeshChunks();
 		}
 
 		sw.Stop();
@@ -99,6 +124,28 @@ public class ChunkQueuer {
 		if(elapsed > 3) {
 			Debug.Log("Update took " + elapsed + " ms.");
 		}
+	}
+
+	public void ClearAndShowChunks() {
+		Debug.Log("ClearAndShowChunks called");
+
+		for(int i = 0; i < ChunksToAppear.Count; i++) {
+			Chunk c = ChunksToAppear[i];
+			if(c.UnityObject != null) {
+				c.UnityObject.GetComponent<Renderer>().enabled = true;
+			}
+		}
+
+		for(int i = 0; i < ChunksToClear.Count; i++) {
+			Chunk c = ChunksToClear[i];
+			if(c.UnityObject != null) {
+				c.UnityObject.GetComponent<Renderer>().enabled = false;
+				UnityObjectPool.PutObject(ref c.UnityObject);
+				c.UnityObject.GetComponent<MeshFilter>().mesh.Clear();
+			}
+		}
+		ChunksToAppear = new List<Chunk>();
+		ChunksToClear = new List<Chunk>();
 	}
 
 	public void PrintArraySlice() {
@@ -120,6 +167,9 @@ public class ChunkQueuer {
 	}
 
 	public void DoChunkUpdate() {
+		Debug.Assert(!MidChunkUpdate);
+		MidChunkUpdate = true;
+
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
 
@@ -220,6 +270,7 @@ public class ChunkQueuer {
 							ChunkStorage[LOD][arrx,arry,arrz] = chunk;
 							ChunkLinearArray[chunk.LinearArrayIndex] = chunk;
 							ChunksToMesh.Add(chunk);
+							ChunksToAppear.Add(chunk);
 						}
 						else {
 							ChunkStorage[LOD][arrx,arry,arrz].CreationTime = updateTime;
@@ -245,14 +296,13 @@ public class ChunkQueuer {
 				if(c.CreationTime != updateTime) {
 					ChunkLinearArray[i] = null;
 					ChunkStorage[c.Key.w][c.Key.x,c.Key.y,c.Key.z] = null;
-					if(c.UnityObject != null) {
-						UnityObjectPool.PutObject(ref c.UnityObject);
-						c.UnityObject.GetComponent<MeshFilter>().mesh.Clear();
-					}
+					ChunksToClear.Add(c);
 					c.State = ChunkState.Cancelled;
 				}
 			}
 		}
+
+		NumChunksRemaining = numChunksAdded;
 
 		for(int i = ChunkLinearArrayMin; i < ChunkLinearArrayMax; i++) {
 			if(ChunkLinearArray[i] != null) {
@@ -265,7 +315,7 @@ public class ChunkQueuer {
 		string msg = "Chunk Update: S1 " + ElapsedMilliseconds1 + "ms, S2 " + ElapsedMilliseconds2 + "ms, Total " + (ElapsedMilliseconds1 + ElapsedMilliseconds2) + "ms (" + numChunksAdded + " chunks added)";
 
 		//UConsole.Print(msg);
-		//Debug.Log(msg);
+		Debug.Log(msg);
 		sw.Stop();
 		Initialized = true;
 
@@ -282,6 +332,7 @@ public class ChunkQueuer {
 	}
 
 	public void MeshChunks() {
+		Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
 		if(ChunksToMesh.Count == 0) {
 			return;
 		}
@@ -300,8 +351,13 @@ public class ChunkQueuer {
 					return UtilFuncs.Sample(x/Resolution, y/Resolution, z/Resolution);
 				};
 				SE.DC.Algorithm2.Run(Resolution, sampleFn, chunk);
+				Interlocked.Increment(ref NumChunksMeshed);
+				
 				if(chunk.Triangles.Length > 0) {
 					ChunksToUpload.Add(chunk);
+				}
+				else {
+					Interlocked.Decrement(ref NumChunksRemaining);
 				}
 				//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
 			});
@@ -319,7 +375,7 @@ public class ChunkQueuer {
 		while(amtuploading > 0) {
 			Chunk chunk;
 			if(ChunksToUpload.TryTake(out chunk)) {
-				//UConsole.Print("Uploading chunk. ");
+				//UConsole.Print("Uploading  chunk. ");
 				UploadChunk(chunk);
 			}
 			else {
@@ -330,13 +386,10 @@ public class ChunkQueuer {
 	}
 
 	public void UploadChunk(Chunk chunk) {
+		Interlocked.Decrement(ref NumChunksRemaining);
 		//System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		//sw.Start();
 		if(chunk.State == ChunkState.Cancelled) {
-			return;
-		}
-
-		if(chunk.Triangles.Length == 0) {
 			return;
 		}
 

@@ -72,132 +72,6 @@ namespace SE.DC
 			//Debug.Log("Uniform dual contouring time for " + resolution + "^3 mesh: " + (genVertsTime + genVertsLod1Time + genIndicesTime) + "ms" + "(GenVerts: " + genVertsTime + ", GenVertsLOD1: " + genVertsLod1Time + ", GenIndices: " + genIndicesTime + ")");
 		}
 
-		public static Mesh Run(SE.Z.ZList zList, Chunks.Chunk chunk) {
-			Mesh mesh = new Mesh();
-
-			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-			sw.Start();
-
-			CellInfo[,,] infos = GenVerticesZList2(zList);
-			List<Vector3> vertices = new List<Vector3>();
-			List<Vector3> normals = new List<Vector3>();
-			List<Vector3> lod1vertices = new List<Vector3>();
-			List<Vector3> lod1normals = new List<Vector3>();
-			List<int> indices = new List<int>();
-			GenIndices(infos, indices, vertices, normals, lod1vertices, lod1normals);
-
-			chunk.Vertices = vertices;
-			chunk.Triangles = indices.ToArray();
-			chunk.Normals = normals;
-			chunk.LOD1Vertices = lod1vertices;
-			chunk.LOD1Normals = lod1normals;
-			chunk.State = Chunks.ChunkState.Blank; 
-
-			sw.Stop();
-			string msg = "ZList Uniform dual contouring time for " + zList.Resolution + "^3 mesh: " + sw.ElapsedMilliseconds;
-			Debug.Log(msg);
-			UConsole.Print(msg);
-			return mesh;
-		}
-
-		public static CellInfo[,,] GenVerticesZList2(Z.ZList zList) {
-			int res = zList.Resolution;
-			int resm1 = zList.Resolution - 1;
-			QEF.QEFSolver[,,] qefs = new QEF.QEFSolver[resm1, resm1, resm1];
-			CellInfo[,,] cellInfos = new CellInfo[resm1, resm1, resm1];
-
-			for(int x = 0; x < resm1; x++) {
-				for(int y = 0; y < resm1; y++) {
-					for(int z = 0; z < resm1; z++) {
-						byte caseCode = 0;
-
-                        if (!zList.SampleSigns[x  ,y  ,z  ]) caseCode |= 1;
-                        if (!zList.SampleSigns[x  ,y  ,z+1]) caseCode |= 2;
-                        if (!zList.SampleSigns[x  ,y+1,z  ]) caseCode |= 4;
-                        if (!zList.SampleSigns[x  ,y+1,z+1]) caseCode |= 8;
-                        if (!zList.SampleSigns[x+1,y  ,z  ]) caseCode |= 16;
-                        if (!zList.SampleSigns[x+1,y  ,z+1]) caseCode |= 32;
-                        if (!zList.SampleSigns[x+1,y+1,z  ]) caseCode |= 64;
-                        if (!zList.SampleSigns[x+1,y+1,z+1]) caseCode |= 128;
-
-						
-						if(caseCode == 0 || caseCode == 255) continue;
-
-						qefs[x,y,z] = new QEF.QEFSolver();
-						cellInfos[x,y,z].Corners = caseCode;
-					}
-				}
-			}
-
-			for(int y = 0; y < res; y++) { // yz rays
-				for(int z = 0; z < res; z++) {
-					foreach(Z.Crossing c in zList.Rays[0][y,z].Crossings) {
-						int x = c.Index;
-						Vector3 position = new Vector3(c.Z, y, z);
-						if(y < resm1 && z < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(position, c.Normal);
-						if(y - 1 >= 0 && z - 1 >= 0 && qefs[x,y-1,z-1] != null) qefs[x,y-1,z-1].Add(position, c.Normal);
-						if(y < resm1 && z - 1 >= 0 && qefs[x,y,z-1] != null) qefs[x,y,z-1].Add(position, c.Normal);
-						if(y - 1 >= 0 && z < resm1 && qefs[x,y-1,z] != null) qefs[x,y-1,z].Add(position, c.Normal);
-					}
-				}
-			}
-			for(int x = 0; x < res; x++) { // xz rays
-				for(int z = 0; z < res; z++) {
-					foreach(Z.Crossing c in zList.Rays[1][x,z].Crossings) {
-						int y = c.Index;
-						Vector3 position = new Vector3(x, c.Z, z);
-						if(x < resm1 && z < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(position, c.Normal);
-						if(x - 1 >= 0 && z - 1 >= 0 && qefs[x-1,y,z-1] != null) qefs[x-1,y,z-1].Add(position, c.Normal);
-						if(x < resm1 && z - 1 >= 0 && qefs[x,y,z-1] != null) qefs[x,y,z-1].Add(position, c.Normal);
-						if(x - 1 >= 0 && z < resm1 && qefs[x-1,y,z] != null) qefs[x-1,y,z].Add(position, c.Normal);
-					}
-				}
-			}
-			for(int x = 0; x < res; x++) { // xy rays
-				for(int y = 0; y < res; y++) {
-					foreach(Z.Crossing c in zList.Rays[2][x,y].Crossings) {
-						int z = c.Index;
-						Vector3 position = new Vector3(x, y, c.Z);
-						if(x < resm1 && y < resm1 && qefs[x,y,z] != null) qefs[x,y,z].Add(new Vector3(x, y, c.Z), c.Normal);
-						if(x - 1 >= 0 && y - 1 >= 0 && qefs[x-1,y-1,z] != null) qefs[x-1,y-1,z].Add(position, c.Normal);
-						if(x < resm1 && y - 1 >= 0 && qefs[x,y-1,z] != null) qefs[x,y-1,z].Add(position, c.Normal);
-						if(x - 1 >= 0 && y < resm1 && qefs[x-1,y,z] != null) qefs[x-1,y,z].Add(position, c.Normal);
-					}
-				}
-			}
-
-			for(int x = 0; x < resm1; x++) {
-				for(int y = 0; y < resm1; y++) {
-					for(int z = 0; z < resm1; z++) {
-						if(cellInfos[x,y,z].Corners == 0) continue;
-
-						QEF.QEFSolver qef = qefs[x,y,z];
-						Vector3 position = qef.Solve(0.0001f, 4, 0.0001f);
-						Vector3 max = new Vector3(x, y, z) + Vector3.one;
-						if (position.x < x || position.x > max.x ||
-							position.y < y || position.y > max.y ||
-							position.z < z || position.z > max.z)
-						{
-							position = qefs[x,y,z].MassPoint;
-						}
-						
-						Vector3 normal = Vector3.zero;
-
-						//vertices.Add(drawInfo.position);
-
-						/*for (int i = 0; i < qef.; i++)
-						{
-							normal += cnormals[i];
-						}*/
-						//cellInfo.Normal = Vector3.Normalize(cellInfo.Normal); //CalculateSurfaceNormal(drawInfo.position, samp);
-
-						cellInfos[x,y,z].Position = position;
-						cellInfos[x,y,z].Normal = Vector3.up;
-					}
-				}
-			}
-			return cellInfos;
-		}
 
 		public static CellInfo[,,] GenVertices(int resolution, UtilFuncs.Sampler samp)
 		{
@@ -324,8 +198,8 @@ namespace SE.DC
 							for (int i = 0; i < 8; i++) {
 								Vector3Int pos = DCC.vioffsets[i] + intPos;
 								if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Corners != 0) {
-									cellInfos[pos.x, pos.y, pos.z].Lod1Normal = Vector3.zero;
-									cellInfos[pos.x, pos.y, pos.z].Lod1Position = new Vector3(x + 1, y + 1, z + 1);
+									cellInfos[pos.x, pos.y, pos.z].Lod1Normal = cellInfos[pos.x, pos.y, pos.z].Normal;
+									cellInfos[pos.x, pos.y, pos.z].Lod1Position = cellInfos[pos.x, pos.y, pos.z].Position;
 								}
 							}
 							continue;
@@ -356,7 +230,7 @@ namespace SE.DC
 						for (int i = 0; i < 8; i++) {
 							Vector3Int pos = DCC.vioffsets[i] + new Vector3Int(x, y, z);
 							if(pos.x < resolution && pos.y < resolution && pos.z < resolution && cellInfos[(int)pos.x, (int)pos.y, (int)pos.z].Corners != 0) {
-								cellInfos[pos.x, pos.y, pos.z].Lod1Normal = lod1normal;
+								cellInfos[pos.x, pos.y, pos.z].Lod1Normal = lod1normal; //cellInfos[pos.x, pos.y, pos.z].Normal;
 								cellInfos[pos.x, pos.y, pos.z].Lod1Position = lod1position;
 							}
 						}
