@@ -100,12 +100,15 @@ public class ChunkQueuer {
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
 
-		Debug.Log("Num chunks remaining: " + NumChunksRemaining + ", NumChunksMeshed: " + NumChunksMeshed);
+		//Debug.Log("Num chunks remaining: " + NumChunksRemaining + ", NumChunksMeshed: " + NumChunksMeshed);
 
 		if(NumChunksRemaining == 0) {
 			NumChunksRemaining = -1;
 			DoneChunkUpdate = true;
+			MidChunkUpdate = false;
 		}
+
+		//Debug.Log("MidChunkUpdate: " + MidChunkUpdate + ", DoneChunkUpdate: " + DoneChunkUpdate);
 
 		if(MidChunkUpdate) {
 			UploadChunks();		
@@ -168,7 +171,6 @@ public class ChunkQueuer {
 
 	public void DoChunkUpdate() {
 		Debug.Assert(!MidChunkUpdate);
-		MidChunkUpdate = true;
 
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
@@ -286,6 +288,7 @@ public class ChunkQueuer {
 			prevLodBoundZMax = maxZ;
 			prevLodBoundZMin = minZ;
 		}
+		MidChunkUpdate = true;
 
 		double ElapsedMilliseconds1 = sw.Elapsed.TotalMilliseconds;
 		sw.Restart();
@@ -332,13 +335,15 @@ public class ChunkQueuer {
 	}
 
 	public void MeshChunks() {
-		Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
+		//Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
 		if(ChunksToMesh.Count == 0) {
 			return;
 		}
 		Task.Factory.StartNew(() => {
 			Busy = true;
-			Parallel.ForEach(ChunksToMesh, (chunk) => {
+			Parallel.ForEach(ChunksToMesh, 
+				new ParallelOptions { MaxDegreeOfParallelism = System.Convert.ToInt32(Mathd.Ceil((System.Environment.ProcessorCount * 0.75) * 1.0)) },
+				(chunk) => {
 				UtilFuncs.Sampler sampleFn = (float x, float y, float z) => {
 					float scaleFactor = ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
 					x *= scaleFactor; 
