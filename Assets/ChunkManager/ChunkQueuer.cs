@@ -79,7 +79,6 @@ public class ChunkQueuer {
 		}
 
 		UnityObjectPool = new CObjectPool<GameObject>(() => {
-			
 			var obj = Object.Instantiate(ChunkPrefab, new Vector3(0, 0, 0), Quaternion.identity);
 			obj.GetComponent<MeshFilter>().mesh = new Mesh();
 			obj.GetComponent<Renderer>().enabled = false;	

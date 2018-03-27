@@ -50,22 +50,22 @@ namespace SE.DC
 			sw.Start();
 			List<Vector3> vertices = new List<Vector3>();
 			List<Vector3> normals = new List<Vector3>();
-			List<Vector3> lod1vertices = new List<Vector3>();
-			List<Vector3> lod1normals = new List<Vector3>();
+			//List<Vector3> lod1vertices = new List<Vector3>();
+			//List<Vector3> lod1normals = new List<Vector3>();
 			List<int> indices = new List<int>();
 
 			CellInfo[,,] drawInfos = GenVertices(resolution, samp);
 			long genVertsTime = sw.ElapsedMilliseconds; sw.Restart();
-			GenVerticesLOD1(resolution, drawInfos, samp);
-			long genVertsLod1Time = sw.ElapsedMilliseconds; sw.Restart();
-			GenIndices(drawInfos, indices, vertices, normals, lod1vertices, lod1normals);
+			//GenVerticesLOD1(resolution, drawInfos, samp);
+			//long genVertsLod1Time = sw.ElapsedMilliseconds; sw.Restart();
+			GenIndices(drawInfos, indices, vertices, normals);
 			long genIndicesTime = sw.ElapsedMilliseconds;
 
 			chunk.Vertices = vertices;
 			chunk.Triangles = indices.ToArray();
 			chunk.Normals = normals;
-			chunk.LOD1Vertices = lod1vertices;
-			chunk.LOD1Normals = lod1normals;
+			//chunk.LOD1Vertices = lod1vertices;
+			//chunk.LOD1Normals = lod1normals;
 			chunk.State = Chunks.ChunkState.Blank; 
 
 			sw.Stop();
@@ -326,6 +326,91 @@ namespace SE.DC
 				}
 			}
 		}
+
+		public static void GenIndices(CellInfo[,,] cellInfos, List<int> indices, List<Vector3> vertices, List<Vector3> normals)
+		{
+			int resolution = cellInfos.GetLength(0);
+			for (int x = 0; x < resolution; x++)
+			{
+				for (int y = 0; y < resolution; y++)
+				{
+					for (int z = 0; z < resolution; z++)
+					{
+						if(x == resolution - 1 || y == resolution - 1 || z == resolution - 1) {
+							continue;
+						}
+
+						CellInfo cellInfo = cellInfos[x, y, z];
+						if (cellInfo.Corners == 0)
+						{
+							continue;
+						}
+						byte caseCode = (byte)cellInfo.Corners;
+						Vector3 p = new Vector3(x, y, z);
+
+						Vector3Int[][] DCEdgeOffsets = {
+							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(0, 1, 0), new Vector3Int(0, 1, 1)},
+							new Vector3Int[] {new Vector3Int(0, 0, 1), new Vector3Int(1, 0, 0), new Vector3Int(1, 0, 1)},
+							new Vector3Int[] {new Vector3Int(0, 1, 0), new Vector3Int(1, 0, 0), new Vector3Int(1, 1, 0)}
+						};
+
+						Vector3Int[] Maxs = {
+							new Vector3Int(0, 1, 1), new Vector3Int(1, 0, 1),  new Vector3Int(1, 1, 0)
+						};
+
+						CellInfo[] infos = new CellInfo[4];
+						infos[0] = cellInfo;
+
+						//int v0 = drawInfo.index;
+						for (int edgeNum = 0; edgeNum < 3; edgeNum++)
+						{
+							Vector3 max = Maxs[edgeNum];
+							Vector3Int[] ofs = DCEdgeOffsets[edgeNum];
+							if (p.x + max.x >= resolution || p.y + max.y >= resolution || p.z + max.z >= resolution)
+							{
+								continue;
+							}
+
+							int ei0 = FarEdges[edgeNum, 0];
+							int ei1 = FarEdges[edgeNum, 1];
+
+							bool edge1 = (caseCode & (1 << ei0)) == (1 << ei0);
+							bool edge2 = (caseCode & (1 << ei1)) == (1 << ei1);
+
+							if (edge1 == edge2)
+							{
+								continue;
+							}
+
+							for(int v = 0; v < 3; v++) {
+								infos[v + 1] = cellInfos[(int)p.x + ofs[v].x, (int)p.y + ofs[v].y, (int)p.z + ofs[v].z];
+							}
+
+							CellInfo[] i1 = { infos[0], infos[1], infos[3] };
+							CellInfo[] i2 = { infos[0], infos[3], infos[2] };
+
+							if (((caseCode >> ei0) & 1) == 1 != (edgeNum == 1))
+							{
+								i1[0] = infos[1]; i1[1] = infos[0];
+								i2[0] = infos[3]; i2[1] = infos[0];
+							} 
+							for (int i = 0; i < 3; i++)
+							{
+								indices.Add(vertices.Count);
+								vertices.Add(i1[i].Position);
+								normals.Add(i1[i].Normal);
+							}
+							for(int i = 0; i < 3; i++) {
+								indices.Add(vertices.Count);
+								vertices.Add(i2[i].Position);
+								normals.Add(i2[i].Normal);
+							}
+						}
+					}
+				}
+			}
+		}
+
 
 		public static Vector3 Lerp(float density1, float density2, float x1, float y1, float z1, float x2, float y2, float z2)
 		{
