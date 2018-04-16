@@ -54,8 +54,8 @@ public class DCController : MonoBehaviour {
 		mf.mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 		mf.mesh.SetVertices(chunk.Vertices);
 		mf.mesh.SetNormals(chunk.Normals);
-		mf.mesh.SetUVs(0, chunk.LOD1Vertices);
-		mf.mesh.SetUVs(1, chunk.LOD1Normals);
+		//mf.mesh.SetUVs(0, chunk.LOD1Vertices);
+		//mf.mesh.SetUVs(1, chunk.LOD1Normals);
 		mf.mesh.triangles = chunk.Triangles;
 
         clone.GetComponent<Transform>().SetPositionAndRotation(chunk.Position, Quaternion.identity);

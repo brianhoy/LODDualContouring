@@ -1,0 +1,41 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#include "Noise/HLSL/SimplexNoise3D.hlsl"
+#define RESOLUTION 128
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture3D<float4> Result; 
+
+float4x4 _localToWorld; 
+float3 _scale;
+float3 _offset;
+
+
+[numthreads(4,4,4)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	//float4 pos = (float4)(id.x, id.y, id.z, 0);
+    float3 coords = ((float3)id * _scale) + _offset * RESOLUTION + float3(0.4314314, 0.65324326, 0.52345234);
+	float freq = 1/128.123;
+	float ampl = 0.9;
+
+	float result = 0.5;
+
+	for(int i = 0; i < 6; i++) {
+		float noise = snoise(coords * freq) * ampl;
+
+		ampl *= 0.5;
+		freq *= 2;
+
+		result += noise;
+	}
+	//float3 grad = snoise_grad((float3)id/16.53254321);
+
+	result *= 30;
+	float ground = -coords.y + 8;
+	result += ground;
+
+	Result[id.xyz] = float4(result, result, result, result);
+	//Result[id.xyz] = float4(id.xyz, 0);
+}

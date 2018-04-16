@@ -6,25 +6,6 @@ using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Chunks {
-public enum ChunkState { Blank, Meshing, Uploading, Completed, Cancelled };
-public class Chunk {
-	public Vector3Int Position;
-	public float CreationTime;
-	public int LOD; // minimum: 0
-	public Vector4Int Key;
-	public int LinearArrayIndex;
-
-	public ChunkState State;
-
-	public List<Vector3> Vertices;
-	public List<Vector3> Normals;
-	public List<Vector3> LOD1Vertices;
-	public List<Vector3> LOD1Normals;
-
-	public int[] Triangles;
-
-	public GameObject UnityObject;
-}
 
 public class ChunkQueuer {
 	private ConcurrentBag<Chunk> ChunksToMesh;
@@ -234,14 +215,20 @@ public class ChunkQueuer {
 				maxZ = cposz;
 			}
 
+			int LODCode = 0;
 
 			for(int x = minCoord; x < maxCoord; x++) {
 				int cposx = ((x - 1) * chunkSize) + snappedViewerX;
 				bool xInBounds = cposx >= prevLodBoundXMin && cposx <= prevLodBoundXMax;
+				if(x == minCoord) { LODCode |= 1; } else { LODCode &= ~1; }
+				if(x == maxCoord) { LODCode |= 2; } else { LODCode &= ~2; }
 
 				for(int y = minCoord; y < maxCoord; y++) {
 					int cposy = ((y - 1) * chunkSize) + snappedViewerY;
 					bool yInBounds = cposy >= prevLodBoundYMin && cposy <= prevLodBoundYMax;
+					if(y == minCoord) { LODCode |= 4; } else { LODCode &= ~4; }
+					if(y == maxCoord) { LODCode |= 8; } else { LODCode &= ~8; }
+
 
 					for(int z = minCoord; z < maxCoord; z++) {
 						int cposz = ((z - 1) * chunkSize) + snappedViewerZ;
@@ -249,6 +236,10 @@ public class ChunkQueuer {
 
 
 						if(LOD != 0 && (xInBounds && yInBounds && zInBounds)) { continue; }
+						if(z == minCoord) { LODCode |= 16; } else { LODCode &= ~16; }
+						if(z == maxCoord) { LODCode |= 32; } else { LODCode &= ~32; }
+
+
 
 						Vector3Int cpos = new Vector3Int(cposx, cposy, cposz);
 
@@ -264,6 +255,7 @@ public class ChunkQueuer {
 							numChunksAdded++;
 							chunk.Position = cpos;
 							chunk.Key = key;
+							chunk.LODCode = LODCode;
 							chunk.LOD = LOD;
 							chunk.CreationTime = updateTime;
 							chunk.State = ChunkState.Blank;
@@ -334,37 +326,32 @@ public class ChunkQueuer {
 	}
 
 	public void MeshChunks() {
-		//Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
+		Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
 		if(ChunksToMesh.Count == 0) {
 			return;
 		}
+
 		Task.Factory.StartNew(() => {
 			Busy = true;
 			Parallel.ForEach(ChunksToMesh, 
-				new ParallelOptions { MaxDegreeOfParallelism = System.Convert.ToInt32(Mathd.Ceil((System.Environment.ProcessorCount * 0.75) * 1.0)) },
+			new ParallelOptions { MaxDegreeOfParallelism = System.Convert.ToInt32(Mathd.Ceil((System.Environment.ProcessorCount * 0.75) * 1.0)) },
 				(chunk) => {
-				UtilFuncs.Sampler sampleFn = (float x, float y, float z) => {
-					float scaleFactor = ((float)MinimumChunkSize / (float)Resolution) * Mathf.Pow(2, chunk.LOD);
-					x *= scaleFactor; 
-					y *= scaleFactor; 
-					z *= scaleFactor;
-					x += chunk.Position.x; 
-					y += chunk.Position.y; 
-					z += chunk.Position.z;
+					Debug.Log("About to polyganize area... ");
 
-					return UtilFuncs.Sample(x/Resolution, y/Resolution, z/Resolution);
-				};
-				SE.DC.Algorithm2.Run(Resolution, sampleFn, chunk);
-				Interlocked.Increment(ref NumChunksMeshed);
-				
-				if(chunk.Triangles.Length > 0) {
-					ChunksToUpload.Add(chunk);
+					bool result = SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk);
+					Interlocked.Increment(ref NumChunksMeshed);
+					
+					Debug.Log("Chunk result: " + result);
+
+					if(result == true) {
+						ChunksToUpload.Add(chunk);
+					}
+					else {
+						Interlocked.Decrement(ref NumChunksRemaining);
+					}
+					//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
 				}
-				else {
-					Interlocked.Decrement(ref NumChunksRemaining);
-				}
-				//Debug.Log("Enqueuing chunk to upload... Queue size: " + ChunksToUpload.Count);
-			});
+			);
 			ChunksToMesh = new ConcurrentBag<Chunk>();
 			Busy = false;
 		});
@@ -410,8 +397,8 @@ public class ChunkQueuer {
 		MeshFilter mf = clone.GetComponent<MeshFilter>();
 		mf.mesh.SetVertices(chunk.Vertices);
 		mf.mesh.SetNormals(chunk.Normals);
-		mf.mesh.SetUVs(0, chunk.LOD1Vertices);
-		mf.mesh.SetUVs(1, chunk.LOD1Normals);
+		//mf.mesh.SetUVs(0, chunk.LOD1Vertices);
+		//mf.mesh.SetUVs(1, chunk.LOD1Normals);
 		mf.mesh.triangles = chunk.Triangles;
 
 		clone.GetComponent<Transform>().SetParent(Parent);
