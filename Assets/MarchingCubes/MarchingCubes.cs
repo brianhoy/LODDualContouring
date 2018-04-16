@@ -29,9 +29,9 @@ namespace SE.MC
 							negExists = true;
 						}
 
-						float dx = samp(x+f, y, z) - samp(x-f, y, z);
-						float dy = samp(x, y+f, z) - samp(x, y-f, z);
-						float dz = samp(x, y, z+f) - samp(x, y, z-f);
+						float dx = density - samp(x-f, y, z);
+						float dy = density - samp(x, y-f, z);
+						float dz = density - samp(x, y, z-f);
 
 						float total = (dx*dx) + (dy*dy) + (dz*dz);
 						total = Mathf.Sqrt(total);
@@ -52,80 +52,153 @@ namespace SE.MC
 			return negExists && posExists;
 		}
 
-        public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk)
+		public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk) {
+			int res1 = resolution + 1;
+			float[] data = new float[res1 * res1 * res1 * 4];
+
+			return PolygonizeArea(resolution, samp, chunk, data);
+		}
+
+        public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk, float[] data)
         {
-			try {
-				int res1 = resolution + 1;
-				int resm1 = resolution - 1;
-				int resm2 = resolution - 2;
+			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
 
-				List<Vector3> vertices = new List<Vector3>();
-				List<Vector3> normals = new List<Vector3>();
-				List<int> triangles = new List<int>();
+			int res1 = resolution + 1;
+			int resm1 = resolution - 1;
+			int resm2 = resolution - 2;
 
-				ushort[] edges = new ushort[res1 * res1 * res1 * 3];
+			List<Vector3> vertices = new List<Vector3>();
+			List<Vector3> normals = new List<Vector3>();
+			List<int> triangles = new List<int>();
 
-
-				Vector3Int begin = new Vector3Int(0, 0, 0);
-				Vector3Int end = new Vector3Int(res1, res1, res1);
-
-				byte lod = (byte)chunk.LODCode;
-
-				System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-				sw.Start();
-
-				if((lod & 1) == 1) begin.x += 1;
-				if((lod & 2) == 2) end.x -= 1;
-				
-				if((lod & 4) == 4) begin.y += 1;
-				if((lod & 8) == 8) end.y -= 1;
-				
-				if((lod & 16) == 16) begin.z += 1;
-				if((lod & 32) == 32) end.z -= 1;
-
-				float[] data = new float[res1 * res1 * res1 * 4];
-
-				bool result;
-
-				result = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
-
-				if(result == false) {
-					return false;
-				}
-
-				Debug.Log("Got here...");
-
-				CreateVertices(edges, begin, end, vertices, normals, res1, data);
+			ushort[] edges = new ushort[res1 * res1 * res1 * 3];
 
 
-				end -= Vector3Int.one;
-				//if((lod & 1) == 1) begin.x += 1;
-				Debug.Log("Got here 2...");
+			Vector3Int begin = new Vector3Int(0, 0, 0);
+			Vector3Int end = new Vector3Int(res1, res1, res1);
+
+			byte lod = (byte)chunk.LODCode;
+
+			if((lod & 1) == 1) begin.x += 1;
+			if((lod & 2) == 2) end.x -= 1;
+			
+			if((lod & 4) == 4) begin.y += 1;
+			if((lod & 8) == 8) end.y -= 1;
+			
+			if((lod & 16) == 16) begin.z += 1;
+			if((lod & 32) == 32) end.z -= 1;
 
 
-				Triangulate(edges, begin, end, triangles, resolution, data);
+			bool result;
 
-				//Debug.Log("Phase 1 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
-				Debug.Log("Got here 3...");
+			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
+			result = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
+			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
 
-				sw.Restart();
-
-				//GenerateTransitionCells(vertices, normals, triangles, resolution, data, lod);
-				Debug.Log("Got here 4...");
-
-				//Debug.Log("Phase 2 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
-				//MCVT(vertices, triangles, normals, resolution, lod, data);
-
-				chunk.Vertices = vertices;
-				chunk.Triangles = triangles.ToArray();
-				chunk.Normals = normals;
-				return true;
-			} catch (System.Exception e) {
-				Debug.LogError("Exception: " + e);
+			if(result == false) {
 				return false;
 			}
+
+			CreateVertices(edges, begin, end, vertices, normals, res1, data);
+			sw.Stop(); createVerticesMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+
+			end -= Vector3Int.one;
+			//if((lod & 1) == 1) begin.x += 1;
+
+
+			Triangulate(edges, begin, end, triangles, resolution, data);
+			sw.Stop(); triangulateMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			//Debug.Log("Phase 1 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
+
+			//GenerateTransitionCells(vertices, normals, triangles, resolution, data, lod);
+			sw.Stop(); transitionCellMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			//Debug.Log("Phase 2 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
+			//MCVT(vertices, triangles, normals, resolution, lod, data);
+
+			Debug.Log("Done meshing " + resolution + "^3 chunk. " + "FillData ms: " + fillDataMs + ", CreateVertices ms: " + createVerticesMs + ", Triangulate ms: " + triangulateMs + ", TransitionCell ms: " + transitionCellMs + " (Total: " + (fillDataMs + createVerticesMs + triangulateMs + transitionCellMs) + "ms. )");
+
+			chunk.Vertices = vertices;
+			chunk.Triangles = triangles.ToArray();
+			chunk.Normals = normals;
+			return true;
         }
 
+		public struct BenchmarkResult {
+			public double fillDataMs;
+			public double createVerticesMs;
+			public double triangulateMs;
+			public double transitionCellMs;
+		}
+
+		public static BenchmarkResult PolygonizeAreaBenchmarked(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk, float[] data)
+        {
+			BenchmarkResult result = new BenchmarkResult();
+			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
+
+			int res1 = resolution + 1;
+			int resm1 = resolution - 1;
+			int resm2 = resolution - 2;
+
+			List<Vector3> vertices = new List<Vector3>();
+			List<Vector3> normals = new List<Vector3>();
+			List<int> triangles = new List<int>();
+
+			ushort[] edges = new ushort[res1 * res1 * res1 * 3];
+
+
+			Vector3Int begin = new Vector3Int(0, 0, 0);
+			Vector3Int end = new Vector3Int(res1, res1, res1);
+
+			byte lod = (byte)chunk.LODCode;
+
+			if((lod & 1) == 1) begin.x += 1;
+			if((lod & 2) == 2) end.x -= 1;
+			
+			if((lod & 4) == 4) begin.y += 1;
+			if((lod & 8) == 8) end.y -= 1;
+			
+			if((lod & 16) == 16) begin.z += 1;
+			if((lod & 32) == 32) end.z -= 1;
+
+
+			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
+			FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
+			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			CreateVertices(edges, begin, end, vertices, normals, res1, data);
+			sw.Stop(); createVerticesMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+
+			end -= Vector3Int.one;
+			//if((lod & 1) == 1) begin.x += 1;
+
+
+			Triangulate(edges, begin, end, triangles, resolution, data);
+			sw.Stop(); triangulateMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			//Debug.Log("Phase 1 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
+
+			//GenerateTransitionCells(vertices, normals, triangles, resolution, data, lod);
+			sw.Stop(); transitionCellMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			//Debug.Log("Phase 2 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
+			//MCVT(vertices, triangles, normals, resolution, lod, data);
+
+			//Debug.Log("Done meshing " + resolution + "^3 chunk. " + "FillData ms: " + fillDataMs + ", CreateVertices ms: " + createVerticesMs + ", Triangulate ms: " + triangulateMs + ", TransitionCell ms: " + transitionCellMs + " (Total: " + (fillDataMs + createVerticesMs + triangulateMs + transitionCellMs) + "ms. )");
+
+			result.createVerticesMs = createVerticesMs;
+			result.fillDataMs = fillDataMs;
+			result.transitionCellMs = transitionCellMs;
+			result.triangulateMs = triangulateMs;
+
+			chunk.Vertices = vertices;
+			chunk.Triangles = triangles.ToArray();
+			chunk.Normals = normals;
+			return result;
+        }
 
         public static void CreateVertices(ushort[] edges, Vector3Int begin, Vector3Int end, List<Vector3> vertices, List<Vector3> normals, int res1, float[] data)
         {
@@ -153,35 +226,18 @@ namespace SE.MC
 						currentIndex = GetIndex(x, y, z, res1);
                         density1 = data[currentIndex];
 
-                        if (density1 == 0)
-                        {
-                            edges[edgeNum] = vertNum;
-                            edges[edgeNum + 1] = vertNum;
-                            edges[edgeNum + 2] = vertNum;
-                            vertNum++;
-                            normals.Add(new Vector3(data[currentIndex+1], data[currentIndex+2], data[currentIndex+3]));
-                            vertices.Add(new Vector3(x, y, z));
-                            continue;
-                        }
                         if (y >= begin.y + 1)
                         {
 							density2index = GetIndex(x, y-1, z, res1);
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum] = edges[edgeNum - res1_3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-                                        data[density2index + 1], data[density2index + 2], data[density2index + 3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
-                                }
+								edges[edgeNum] = vertNum;
+								vertNum++;
+								normals.Add(LerpN(density1, density2,
+									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
+									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+								vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
                             }
                         }
                         if (x >= begin.x + 1)
@@ -190,19 +246,12 @@ namespace SE.MC
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum + 1] = edges[edgeNum - res1_2_3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum + 1] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-                                        data[density2index + 1], data[density2index + 2], data[density2index + 3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
-                                }
+								edges[edgeNum + 1] = vertNum;
+								vertNum++;
+								normals.Add(LerpN(density1, density2,
+									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
+									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+								vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
                             }
                         }
                         if (z >= begin.z + 1)
@@ -211,19 +260,12 @@ namespace SE.MC
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum + 2] = edges[edgeNum - 3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum + 2] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-                                        data[density2index + 1], data[density2index + 2], data[density2index + 3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
-                                }
+								edges[edgeNum + 2] = vertNum;
+								vertNum++;
+								normals.Add(LerpN(density1, density2,
+									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
+									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+								vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
                             }
                         }
                     }
@@ -248,36 +290,46 @@ namespace SE.MC
             {
                 for (int y = begin.y; y < end.y; y++)
                 {
-                    for (int z = begin.z; z < end.z; z++, currentIndex += 4)
+                    for (int z = begin.z; z < end.z; z++)
                     {
+						currentIndex = 4 * ((z * res1 * res1) + (y * res1) + x);
                         byte caseCode = 0;
 
-                        /*densities[0] = data[currentIndex + res1_2_4];
-                        densities[1] = data[currentIndex + res1_2_4 + 4];
+                        /*
+                        densities[1] = data[GetIndex(x + 1, y, z + 1, res1)];
+                        densities[2] = data[GetIndex(x + 1, y, z, res1)];
+                        densities[3] = data[GetIndex(x, y, z, res1)];
+                        densities[4] = data[GetIndex(x, y + 1, z + 1, res1)];
+                        densities[5] = data[GetIndex(x + 1, y + 1, z + 1, res1)];
+                        densities[6] = data[GetIndex(x + 1, y + 1, z, res1)];
+                        densities[7] = data[GetIndex(x, y + 1, z, res1)];*/
+						
+						densities[0] = data[currentIndex + res1_2_4];
+						densities[1] = data[currentIndex + res1_2_4 + 4];
                         densities[2] = data[currentIndex + 4];
                         densities[3] = data[currentIndex];
                         densities[4] = data[currentIndex + res1_4 + res1_2_4];
                         densities[5] = data[currentIndex + res1_4 + res1_2_4 + 4];
                         densities[6] = data[currentIndex + res1_4 + 4];
-                        densities[7] = data[currentIndex + res1_4];*/
+                        densities[7] = data[currentIndex + res1_4];
 
-                        densities[0] = data[GetIndex(x, y, z + 1, res1)];
+                        /*densities[0] = data[GetIndex(x, y, z + 1, res1)];
                         densities[1] = data[GetIndex(x + 1, y, z + 1, res1)];
-                        densities[2] = data[GetIndex(x, y, z, res1)];
+                        densities[2] = data[GetIndex(x + 1, y, z, res1)];
                         densities[3] = data[GetIndex(x, y, z, res1)];
                         densities[4] = data[GetIndex(x, y + 1, z + 1, res1)];
                         densities[5] = data[GetIndex(x + 1, y + 1, z + 1, res1)];
                         densities[6] = data[GetIndex(x + 1, y + 1, z, res1)];
-                        densities[7] = data[GetIndex(x, y + 1, z, res1)];
+                        densities[7] = data[GetIndex(x, y + 1, z, res1)];*/
 
-                        if (densities[0] < 0) caseCode |= 1;
-                        if (densities[1] < 0) caseCode |= 2;
-                        if (densities[2] < 0) caseCode |= 4;
-                        if (densities[3] < 0) caseCode |= 8;
-                        if (densities[4] < 0) caseCode |= 16;
-                        if (densities[5] < 0) caseCode |= 32;
-                        if (densities[6] < 0) caseCode |= 64;
-                        if (densities[7] < 0) caseCode |= 128;
+                        if (densities[0] >= 0) caseCode |= 1;
+                        if (densities[1] >= 0) caseCode |= 2;
+                        if (densities[2] >= 0) caseCode |= 4;
+                        if (densities[3] >= 0) caseCode |= 8;
+                        if (densities[4] >= 0) caseCode |= 16;
+                        if (densities[5] >= 0) caseCode |= 32;
+                        if (densities[6] >= 0) caseCode |= 64;
+                        if (densities[7] >= 0) caseCode |= 128;
 
                         if (caseCode == 0 || caseCode == 255) continue;
 

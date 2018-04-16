@@ -10,7 +10,7 @@ public static class UtilFuncs {
 	static UtilFuncs() {
 		myNoise = new FastNoise();
 		myNoise.SetNoiseType(FastNoise.NoiseType.PerlinFractal);
-		myNoise.SetFractalOctaves(8);
+		myNoise.SetFractalOctaves(2);
 		
 
 	}
@@ -38,20 +38,29 @@ public static class UtilFuncs {
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 
-        float r = 3f;
+        //float r = 3f;
+		float r2 = 0.05f;
 		float result = 0f;
         float ground = -1.5f + y; 
 
-        float noise = myNoise.GetNoise(x * r, z * r) * 50;
-        ground -= noise;
+		result += ground;
 
-		float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
+		result += (UnityEngine.Mathf.PerlinNoise(x * r2, z * r2) - 0.5f) * 150;
+
+		//result += myNoise.GetNoise(x * r, y * r, z * r) * 50;
+        //float noise = myNoise.GetNoise(x * r, z * r) * 50;
+        //ground -= noise;
+
+		//float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
 		//Debug.Log("Cuboid result: " + res);
 
 
-		//result += Sphere(x, y, z, 4f);
+		//result = ground;
+
+		//float r2 = 1f/50f;
+		//result += Sphere(x - 32, y - 32, z - 32, 30);
         //result += (float)s.Evaluate((double)x * r, (double)y * r, (double)z * r) * 15;
-		result = Mathf.Min(ground, cube);
+		//result = Mathf.Min(ground, cube);
 
 		
 
@@ -92,11 +101,8 @@ public static class UtilFuncs {
 		return new Vector3(Mathf.Abs(p.x), Mathf.Abs(p.y), Mathf.Abs(p.z));
 	}
 
-	public static float Sphere(float x, float y, float z) {
-        x -= 8;
-        y -= 8;
-        z -= 8;
-		return x * x + y * y + z * z - 5 * 5;
+	public static float Sphere(float x, float y, float z, float r) {
+		return x * x + y * y + z * z - r * r;
 	}
 
     public static Vector3 Lerp(float isolevel, Point point1, Point point2) {

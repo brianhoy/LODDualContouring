@@ -13,6 +13,11 @@ public class DCController : MonoBehaviour {
 	public int Resolution = 16;
 	public int Radius = 5;
 
+	public int BenchmarkResolution = 64;
+	public int BenchmarkTrials = 64;
+
+	public float[] testData;
+
 	Chunks.ChunkQueuer queuer;
 
 	Chunks.Chunk testChunk;
@@ -24,21 +29,69 @@ public class DCController : MonoBehaviour {
 		Shader.SetGlobalInt("_ChunkResolution", Resolution);
 		Shader.SetGlobalInt("_ChunkMinimumSize", MinimumChunkSize);
 
+		testData = new float[(int)Mathf.Pow(Resolution + 1, 3) * 4];
+		//CreateTestChunk();
+
 		//DualContouringTest();
-		queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
+		//queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
 	}
 	
 
 
 	// Update is called once per frame
 	void Update () {
-		if(Input.GetKeyDown(KeyCode.U)) {
+		if(Input.GetKeyDown(KeyCode.R)) {
+			CreateTestChunk();
 			//DualContouringTest();
 		}
-		queuer.Update();
-		Vector3 pos = Camera.GetComponent<Transform>().position;
-		Shader.SetGlobalVector("_ViewerPosition", new Vector4(pos.x, pos.y, pos.z, 0));
-		//wrapper.Update(Camera.GetComponent<Transform>().position);
+		if(Input.GetKeyDown(KeyCode.B)) {
+			Benchmark();
+		}
+		//queuer.Update();
+	}
+
+	void Benchmark() {
+		Chunks.Chunk chunk = new Chunks.Chunk();
+		chunk.Position = new Vector3Int(0, 0, 0);
+		chunk.LOD = 0;
+		SE.MC.Algorithm.BenchmarkResult totals = new SE.MC.Algorithm.BenchmarkResult();
+
+		for(int i = 0; i < BenchmarkTrials; i++) {
+			chunk.Position.x += Resolution;
+			SE.MC.Algorithm.BenchmarkResult result = SE.MC.Algorithm.PolygonizeAreaBenchmarked(BenchmarkResolution, UtilFuncs.Sample, chunk, testData);
+			totals.createVerticesMs += result.createVerticesMs;
+			totals.fillDataMs += result.fillDataMs;
+			totals.transitionCellMs = result.transitionCellMs;
+			totals.triangulateMs = result.triangulateMs;
+		}
+
+		totals.createVerticesMs /= (float)BenchmarkTrials;
+		totals.fillDataMs /= (float)BenchmarkTrials;
+		totals.transitionCellMs /= (float)BenchmarkTrials;
+		totals.triangulateMs /= (float)BenchmarkTrials;
+		
+		Debug.Log("Done benchmark. " + "Average FillData ms: " + totals.fillDataMs + ", CreateVertices ms: " + totals.createVerticesMs + ", Triangulate ms: " + totals.triangulateMs + ", TransitionCell ms: " + totals.transitionCellMs + " (Total: " + (totals.transitionCellMs + totals.triangulateMs + totals.createVerticesMs + totals.fillDataMs) + "ms. )");
+	}
+
+	void CreateTestChunk() {
+		if(testChunk != null) {
+			Object.Destroy(testChunk.UnityObject);
+		}
+
+		Chunks.Chunk chunk = new Chunks.Chunk();
+		chunk.Position = new Vector3Int(0, 0, 0);
+		chunk.LOD = 0;
+
+		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+		sw.Start();
+
+		SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk, testData);
+
+		sw.Stop();
+		Debug.Log("Time to mesh " + Resolution + "^3 chunk: " + sw.Elapsed.Milliseconds + " ms");
+
+		testChunk = chunk;
+		Meshify(chunk);
 	}
 
 	GameObject Meshify(Chunks.Chunk chunk) {
