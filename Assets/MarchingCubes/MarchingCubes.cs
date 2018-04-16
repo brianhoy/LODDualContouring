@@ -217,16 +217,24 @@ namespace SE.MC
 			int currentIndex = 0;
 			int density2index = 0;
 
-            for (int x = begin.x; x < end.x; x++)
+			int beginx = begin.x;
+			int beginy = begin.y;
+			int beginz = begin.z;
+
+			int endx = end.x;
+			int endy = end.y;
+			int endz = end.z;
+
+            for (int x = beginx; x < endx; x++)
             {
-                for (int y = begin.y; y < end.y; y++)
+                for (int y = beginy; y < endy; y++)
                 {
-                    for (int z = begin.z; z < end.z; z++, edgeNum += 3)
+                    for (int z = beginz; z < endz; z++, edgeNum += 3)
                     {
 						currentIndex = GetIndex(x, y, z, res1);
                         density1 = data[currentIndex];
 
-                        if (y >= begin.y + 1)
+                        if (y > beginy)
                         {
 							density2index = GetIndex(x, y-1, z, res1);
                             density2 = data[density2index];
@@ -240,7 +248,7 @@ namespace SE.MC
 								vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
                             }
                         }
-                        if (x >= begin.x + 1)
+                        if (x > beginx)
                         {
 							density2index = GetIndex(x-1, y, z, res1);
                             density2 = data[density2index];
@@ -254,7 +262,7 @@ namespace SE.MC
 								vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
                             }
                         }
-                        if (z >= begin.z + 1)
+                        if (z > beginz)
                         {
 							density2index = GetIndex(x, y, z-1, res1);//currentIndex - res1_2_4;
                             density2 = data[density2index];

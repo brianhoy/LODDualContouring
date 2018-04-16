@@ -16,7 +16,7 @@ public class DCController : MonoBehaviour {
 	public int BenchmarkResolution = 64;
 	public int BenchmarkTrials = 64;
 
-	public float[] testData;
+	private float[] testData;
 
 	Chunks.ChunkQueuer queuer;
 
@@ -70,7 +70,9 @@ public class DCController : MonoBehaviour {
 		totals.transitionCellMs /= (float)BenchmarkTrials;
 		totals.triangulateMs /= (float)BenchmarkTrials;
 		
-		Debug.Log("Done benchmark. " + "Average FillData ms: " + totals.fillDataMs + ", CreateVertices ms: " + totals.createVerticesMs + ", Triangulate ms: " + totals.triangulateMs + ", TransitionCell ms: " + totals.transitionCellMs + " (Total: " + (totals.transitionCellMs + totals.triangulateMs + totals.createVerticesMs + totals.fillDataMs) + "ms. )");
+		string result2 = "Done benchmark. Trials: " + BenchmarkTrials + ", Average FillData ms: " + totals.fillDataMs + ", CreateVertices ms: " + totals.createVerticesMs + ", Triangulate ms: " + totals.triangulateMs + ", TransitionCell ms: " + totals.transitionCellMs + " (Total: " + (totals.transitionCellMs + totals.triangulateMs + totals.createVerticesMs + totals.fillDataMs) + "ms. )";
+		Debug.Log(result2);
+		UConsole.Print(result2);
 	}
 
 	void CreateTestChunk() {
