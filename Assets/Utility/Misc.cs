@@ -38,10 +38,10 @@ public static class UtilFuncs {
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 
-        float r = 3f;
+        float r = 8f;
 		float r2 = 0.05f;
 		float result = 0f;
-        float ground = -4.5f + y; 
+        float ground = -5.5f + y; 
 
 		result += ground;
 
@@ -49,7 +49,7 @@ public static class UtilFuncs {
 
 		//result += myNoise.GetNoise(x * r, y * r, z * r) * 50;
         //float noise = myNoise.GetNoise(x * r, z * r) * 50;
-        //ground -= noise;
+        //result -= noise;
 
 		//float cube = RotatedCuboid(new Vector3(x, y - 6, z), 4f);
 		//Debug.Log("Cuboid result: " + res);

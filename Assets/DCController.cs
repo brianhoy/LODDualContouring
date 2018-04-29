@@ -16,7 +16,7 @@ public class DCController : MonoBehaviour {
 	public int BenchmarkResolution = 64;
 	public int BenchmarkTrials = 64;
 
-	public float[] testData;
+	private float[] testData;
 
 	Chunks.ChunkQueuer queuer;
 
@@ -29,7 +29,7 @@ public class DCController : MonoBehaviour {
 		Shader.SetGlobalInt("_ChunkResolution", Resolution);
 		Shader.SetGlobalInt("_ChunkMinimumSize", MinimumChunkSize);
 
-		testData = new float[(int)Mathf.Pow(Resolution + 1, 3) * 4];
+		testData = new float[(int)Mathf.Pow(BenchmarkResolution + 1, 3) * 4];
 		//CreateTestChunk();
 
 		//DualContouringTest();
@@ -58,11 +58,12 @@ public class DCController : MonoBehaviour {
 
 		for(int i = 0; i < BenchmarkTrials; i++) {
 			chunk.Position.x += Resolution;
+			chunk.LODCode = (chunk.LODCode + 1) % 64;
 			SE.MC.Algorithm.BenchmarkResult result = SE.MC.Algorithm.PolygonizeAreaBenchmarked(BenchmarkResolution, UtilFuncs.Sample, chunk, testData);
 			totals.createVerticesMs += result.createVerticesMs;
 			totals.fillDataMs += result.fillDataMs;
-			totals.transitionCellMs = result.transitionCellMs;
-			totals.triangulateMs = result.triangulateMs;
+			totals.transitionCellMs += result.transitionCellMs;
+			totals.triangulateMs += result.triangulateMs;
 		}
 
 		totals.createVerticesMs /= (float)BenchmarkTrials;
@@ -70,7 +71,9 @@ public class DCController : MonoBehaviour {
 		totals.transitionCellMs /= (float)BenchmarkTrials;
 		totals.triangulateMs /= (float)BenchmarkTrials;
 		
-		Debug.Log("Done benchmark. " + "Average FillData ms: " + totals.fillDataMs + ", CreateVertices ms: " + totals.createVerticesMs + ", Triangulate ms: " + totals.triangulateMs + ", TransitionCell ms: " + totals.transitionCellMs + " (Total: " + (totals.transitionCellMs + totals.triangulateMs + totals.createVerticesMs + totals.fillDataMs) + "ms. )");
+		string result2 = "Done benchmark. Res: " + BenchmarkResolution + ", Trials: " + BenchmarkTrials + ", Average FillData ms: " + totals.fillDataMs + ", CreateVertices ms: " + totals.createVerticesMs + ", Triangulate ms: " + totals.triangulateMs + ", TransitionCell ms: " + totals.transitionCellMs + " (Total: " + (totals.transitionCellMs + totals.triangulateMs + totals.createVerticesMs + totals.fillDataMs) + "ms. )";
+		Debug.Log(result2);
+		UConsole.Print(result2);
 	}
 
 	void CreateTestChunk() {
@@ -81,7 +84,7 @@ public class DCController : MonoBehaviour {
 		Chunks.Chunk chunk = new Chunks.Chunk();
 		chunk.Position = new Vector3Int(0, 0, 0);
 		//chunk.LOD = 1;
-		chunk.LODCode = 1;
+		chunk.LODCode = 3 + 16 + 32;
 
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
