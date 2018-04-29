@@ -326,23 +326,19 @@ public class ChunkQueuer {
 	}
 
 	public void MeshChunks() {
-		Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
 		if(ChunksToMesh.Count == 0) {
 			return;
 		}
+		Debug.Log("Meshing chunks. Count: " + ChunksToMesh.Count);
 
 		Task.Factory.StartNew(() => {
 			Busy = true;
 			Parallel.ForEach(ChunksToMesh, 
 			new ParallelOptions { MaxDegreeOfParallelism = System.Convert.ToInt32(Mathd.Ceil((System.Environment.ProcessorCount * 0.75) * 1.0)) },
 				(chunk) => {
-					Debug.Log("About to polyganize area... ");
-
 					bool result = SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk);
 					Interlocked.Increment(ref NumChunksMeshed);
 					
-					Debug.Log("Chunk result: " + result);
-
 					if(result == true) {
 						ChunksToUpload.Add(chunk);
 					}

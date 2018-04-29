@@ -80,7 +80,8 @@ public class DCController : MonoBehaviour {
 
 		Chunks.Chunk chunk = new Chunks.Chunk();
 		chunk.Position = new Vector3Int(0, 0, 0);
-		chunk.LOD = 0;
+		//chunk.LOD = 1;
+		chunk.LODCode = 1;
 
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
@@ -121,5 +122,6 @@ public class DCController : MonoBehaviour {
 		if(queuer != null) {
 			queuer.DrawGizmos();
 		}
+		SE.MC.Algorithm.DrawGizmos();
 	}
 }

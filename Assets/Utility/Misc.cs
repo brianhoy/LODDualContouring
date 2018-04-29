@@ -38,14 +38,14 @@ public static class UtilFuncs {
     public static float Sample(float x, float y, float z) {
 		//Debug.Log("Sampling at " + x + ", " + y + ", " + z);
 
-        //float r = 3f;
+        float r = 3f;
 		float r2 = 0.05f;
 		float result = 0f;
-        float ground = -1.5f + y; 
+        float ground = -4.5f + y; 
 
 		result += ground;
 
-		result += (UnityEngine.Mathf.PerlinNoise(x * r2, z * r2) - 0.5f) * 150;
+		//result += (UnityEngine.Mathf.PerlinNoise(x * r2, z * r2) - 0.5f) * 15;
 
 		//result += myNoise.GetNoise(x * r, y * r, z * r) * 50;
         //float noise = myNoise.GetNoise(x * r, z * r) * 50;

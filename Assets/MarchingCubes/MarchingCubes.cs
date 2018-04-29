@@ -6,6 +6,9 @@ using UnityEngine;
 namespace SE.MC
 {	public static class Algorithm
 	{
+		private static List<Vector3> DebugPoints = new List<Vector3>();
+		private static ushort[] LastEdges;
+
 		public static bool FillData(int resolution, Vector3Int start, int stepSize, UtilFuncs.Sampler samp, float[] data) {
 			int currentIndex = 0;
 
@@ -62,8 +65,17 @@ namespace SE.MC
         public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk, float[] data)
         {
 			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
-
+			bool result;
 			int res1 = resolution + 1;
+
+			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
+			result = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
+			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			if(result == false) {
+				return false;
+			}
+
 			int resm1 = resolution - 1;
 			int resm2 = resolution - 2;
 
@@ -72,7 +84,7 @@ namespace SE.MC
 			List<int> triangles = new List<int>();
 
 			ushort[] edges = new ushort[res1 * res1 * res1 * 3];
-
+			LastEdges = edges;
 
 			Vector3Int begin = new Vector3Int(0, 0, 0);
 			Vector3Int end = new Vector3Int(res1, res1, res1);
@@ -89,22 +101,13 @@ namespace SE.MC
 			if((lod & 32) == 32) end.z -= 1;
 
 
-			bool result;
-
-			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
-			result = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
-			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
-
-			if(result == false) {
-				return false;
-			}
 
 			CreateVertices(edges, begin, end, vertices, normals, res1, data);
 			sw.Stop(); createVerticesMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
 
 
 			end -= Vector3Int.one;
-			//if((lod & 1) == 1) begin.x += 1;
+			if((lod & 1) == 1) { end.x -= 1; begin.x -= 1; }
 
 
 			Triangulate(edges, begin, end, triangles, resolution, data);
@@ -238,6 +241,8 @@ namespace SE.MC
 									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
 									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
 								vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
+								//Debug.Assert(vertices[vertices.Count - 1].x > 0.9f);
+								DebugPoints.Add(vertices[vertices.Count - 1]);
                             }
                         }
                         if (x >= begin.x + 1)
@@ -252,6 +257,7 @@ namespace SE.MC
 									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
 									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
 								vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
+								Debug.Assert(vertices[vertices.Count - 1].x > 0.9f);
                             }
                         }
                         if (z >= begin.z + 1)
@@ -266,6 +272,7 @@ namespace SE.MC
 									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
 									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
 								vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
+								Debug.Assert(vertices[vertices.Count - 1].x > 0.9f);
                             }
                         }
                     }
@@ -292,7 +299,7 @@ namespace SE.MC
                 {
                     for (int z = begin.z; z < end.z; z++)
                     {
-						currentIndex = 4 * ((z * res1 * res1) + (y * res1) + x);
+						currentIndex = GetIndex(x, y, z, res1); //4 * ((z * res1 * res1) + (y * res1) + x);
                         byte caseCode = 0;
 
                         /*
@@ -304,23 +311,23 @@ namespace SE.MC
                         densities[6] = data[GetIndex(x + 1, y + 1, z, res1)];
                         densities[7] = data[GetIndex(x, y + 1, z, res1)];*/
 						
-						densities[0] = data[currentIndex + res1_2_4];
+						/*densities[0] = data[currentIndex + res1_2_4];
 						densities[1] = data[currentIndex + res1_2_4 + 4];
                         densities[2] = data[currentIndex + 4];
                         densities[3] = data[currentIndex];
                         densities[4] = data[currentIndex + res1_4 + res1_2_4];
                         densities[5] = data[currentIndex + res1_4 + res1_2_4 + 4];
                         densities[6] = data[currentIndex + res1_4 + 4];
-                        densities[7] = data[currentIndex + res1_4];
+                        densities[7] = data[currentIndex + res1_4];*/
 
-                        /*densities[0] = data[GetIndex(x, y, z + 1, res1)];
+                        densities[0] = data[GetIndex(x, y, z + 1, res1)];
                         densities[1] = data[GetIndex(x + 1, y, z + 1, res1)];
                         densities[2] = data[GetIndex(x + 1, y, z, res1)];
                         densities[3] = data[GetIndex(x, y, z, res1)];
                         densities[4] = data[GetIndex(x, y + 1, z + 1, res1)];
                         densities[5] = data[GetIndex(x + 1, y + 1, z + 1, res1)];
                         densities[6] = data[GetIndex(x + 1, y + 1, z, res1)];
-                        densities[7] = data[GetIndex(x, y + 1, z, res1)];*/
+                        densities[7] = data[GetIndex(x, y + 1, z, res1)];
 
                         if (densities[0] >= 0) caseCode |= 1;
                         if (densities[1] >= 0) caseCode |= 2;
@@ -549,6 +556,18 @@ namespace SE.MC
 			float dz = sample(p.x, p.y, p.z + H) - sample(p.x, p.y, p.z - H);
 
 			return new Vector3(dx, dy, dz).normalized;
+		}
+
+		public static void DrawGizmos() {
+			if(LastEdges == null) return;
+			for(int i = 0; i < LastEdges.Length; i++) {
+				int index = LastEdges[i];
+				UnityEngine.Gizmos.DrawSphere(DebugPoints[index], 0.3f);
+			}
+
+			/*foreach(Vector3 point in DebugPoints) {
+				UnityEngine.Gizmos.DrawSphere(point, 0.3f);
+			}*/
 		}
 	}
 }
