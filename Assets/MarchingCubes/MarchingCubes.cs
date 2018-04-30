@@ -6,8 +6,12 @@ using UnityEngine;
 namespace SE.MC
 {	public static class Algorithm
 	{
+		private static FastNoiseSIMD fastNoise;
+
 		public static bool FillData(int resolution, Vector3Int start, int stepSize, UtilFuncs.Sampler samp, float[] data) {
 			int currentIndex = 0;
+
+			stepSize /= resolution;
 
 			int endX = resolution * stepSize + start.x;
 			int endY = resolution * stepSize + start.y;
@@ -50,6 +54,10 @@ namespace SE.MC
 				}
 			}
 			return negExists && posExists;
+		}
+
+		public static void FillData(int resolution, Vector3Int start, float frequency, float[] data) {
+
 		}
 
 		public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk) {
@@ -381,7 +389,6 @@ namespace SE.MC
 
         public static void Triangulate(ushort[] edges, Vector3Int begin, Vector3Int end, List<int> triangles, int resolution, float[] data)
         {
-            float[] densities = new float[8];
             int mcEdge;
 
             int res1 = resolution + 1;
@@ -410,23 +417,14 @@ namespace SE.MC
 						currentIndex = 4 * ((z * res1 * res1) + (y * res1) + x);
                         byte caseCode = 0;
 						
-						densities[0] = data[currentIndex + res1_2_4];
-						densities[1] = data[currentIndex + res1_2_4 + 4];
-                        densities[2] = data[currentIndex + 4];
-                        densities[3] = data[currentIndex];
-                        densities[4] = data[currentIndex + res1_4 + res1_2_4];
-                        densities[5] = data[currentIndex + res1_4 + res1_2_4 + 4];
-                        densities[6] = data[currentIndex + res1_4 + 4];
-                        densities[7] = data[currentIndex + res1_4];
-
-                        if (densities[0] >= 0) caseCode |= 1;
-                        if (densities[1] >= 0) caseCode |= 2;
-                        if (densities[2] >= 0) caseCode |= 4;
-                        if (densities[3] >= 0) caseCode |= 8;
-                        if (densities[4] >= 0) caseCode |= 16;
-                        if (densities[5] >= 0) caseCode |= 32;
-                        if (densities[6] >= 0) caseCode |= 64;
-                        if (densities[7] >= 0) caseCode |= 128;
+                        if (data[currentIndex + res1_2_4] >= 0) caseCode |= 1;
+                        if (data[currentIndex + res1_2_4 + 4] >= 0) caseCode |= 2;
+                        if (data[currentIndex + 4] >= 0) caseCode |= 4;
+                        if (data[currentIndex] >= 0) caseCode |= 8;
+                        if (data[currentIndex + res1_4 + res1_2_4] >= 0) caseCode |= 16;
+                        if (data[currentIndex + res1_4 + res1_2_4 + 4] >= 0) caseCode |= 32;
+                        if (data[currentIndex + res1_4 + 4] >= 0) caseCode |= 64;
+                        if (data[currentIndex + res1_4] >= 0) caseCode |= 128;
 
                         if (caseCode == 0 || caseCode == 255) continue;
 
@@ -516,6 +514,7 @@ namespace SE.MC
                             for (int i = 0; i < offsets.Length; i++)
                             {
 								Vector3Int[] points = new Vector3Int[8];
+
                                 for (int j = 0; j < 8; j++)
                                 {
                                     Vector3Int pos = new Vector3Int(x + 1, y + 1, z + 1);

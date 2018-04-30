@@ -383,12 +383,12 @@ public class ChunkQueuer {
 		//Debug.Log("Uploading chunk...");
 		chunk.State = ChunkState.Uploading;
 		GameObject clone = UnityObjectPool.GetObject();
-		//Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
-		//clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
+		Color c = UtilFuncs.SinColor(chunk.LOD * 3f);
+		clone.GetComponent<MeshRenderer>().material.color = new Color(c.r, c.g, c.b, 0.9f);
 		clone.GetComponent<MeshRenderer>().material.SetInt("_LOD", chunk.LOD);
 		clone.GetComponent<MeshRenderer>().material.SetVector("_ChunkPosition", new Vector4(chunk.Position.x, chunk.Position.y, chunk.Position.z));
 
-		//clone.name = "Node " + chunk.Key + ", LOD " + chunk.LOD;
+		clone.name = "Node " + chunk.Key + ", LOD " + chunk.LOD;
 
 		MeshFilter mf = clone.GetComponent<MeshFilter>();
 		mf.mesh.SetVertices(chunk.Vertices);

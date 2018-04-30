@@ -33,7 +33,7 @@ public class DCController : MonoBehaviour {
 		//CreateTestChunk();
 
 		//DualContouringTest();
-		//queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
+		queuer = new Chunks.ChunkQueuer(Camera.GetComponent<Transform>(), this.GetComponent<Transform>(), LODs, Resolution, Radius, MinimumChunkSize, ChunkPrefab);
 	}
 	
 
@@ -47,7 +47,7 @@ public class DCController : MonoBehaviour {
 		if(Input.GetKeyDown(KeyCode.B)) {
 			Benchmark();
 		}
-		//queuer.Update();
+		queuer.Update();
 	}
 
 	void Benchmark() {
