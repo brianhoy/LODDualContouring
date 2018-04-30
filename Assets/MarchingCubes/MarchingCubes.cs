@@ -6,7 +6,13 @@ using UnityEngine;
 namespace SE.MC
 {	public static class Algorithm
 	{
-		private static FastNoiseSIMD fastNoise;
+		private static FastNoiseSIMD noise;
+
+		static Algorithm() {
+			noise = new FastNoiseSIMD();
+			noise.SetNoiseType(FastNoiseSIMD.NoiseType.Simplex);
+			noise.SetFrequency(0.0001f);
+		}
 
 		public static bool FillData(int resolution, Vector3Int start, int stepSize, UtilFuncs.Sampler samp, float[] data) {
 			int currentIndex = 0;
@@ -56,13 +62,21 @@ namespace SE.MC
 			return negExists && posExists;
 		}
 
-		public static void FillData(int resolution, Vector3Int start, float frequency, float[] data) {
+		public static void FillData(int resolution, Chunks.Chunk chunk, float[] data) {
+			noise.FillNoiseSet(data, chunk.Position.x, chunk.Position.y, chunk.Position.z, resolution + 2, resolution + 2, resolution + 2, Mathf.Pow(2, chunk.LOD));
+
+			string noiseStr = "Noise: {";
+			for(int i = 0; i < resolution * resolution; i++) {
+				noiseStr += data[i] + ", ";
+			}
+			noiseStr += "}";
+			Debug.Log(noiseStr);
 
 		}
 
 		public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk) {
-			int res1 = resolution + 1;
-			float[] data = new float[res1 * res1 * res1 * 4];
+			int res2 = resolution + 2;
+			float[] data = new float[res2*res2*res2];
 
 			return PolygonizeArea(resolution, samp, chunk, data);
 		}
@@ -70,16 +84,11 @@ namespace SE.MC
         public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk, float[] data)
         {
 			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
-			bool result;
 			int res1 = resolution + 1;
 
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
-			result = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
+			FillData(resolution + 2, chunk, data);
 			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
-
-			if(result == false) {
-				return false;
-			}
 
 			int resm1 = resolution - 1;
 			int resm2 = resolution - 2;
@@ -208,11 +217,11 @@ namespace SE.MC
 
         public static void CreateVertices(ushort[] edges, Vector3Int begin, Vector3Int end, List<Vector3> vertices, List<Vector3> normals, int res1, float[] data)
         {
-			//Debug.Log("CreateVertices called with begin " + begin + ", end: " + end);
-
             int edgeNum = 0;
             ushort vertNum = 0;
             float density1, density2;
+			Vector3 normal1, normal2;
+			int res2 = res1 + 1;
 
             int res1_3 = res1 * 3;
             int res1_2_3 = res1 * res1 * 3;
@@ -238,48 +247,50 @@ namespace SE.MC
                     for (int z = beginz; z < endz; z++)
                     {
 						edgeNum = GetEdge3DB(x, y, z, 0, res1);
-						currentIndex = GetIndex(x, y, z, res1);
+						currentIndex = GetIndex2(x, y, z, res2);
                         density1 = data[currentIndex];
+						normal1 = GetNormal(x, y, z, res2, data);
 
                         if (y > beginy)
                         {
-							density2index = GetIndex(x, y-1, z, res1);
+							density2index = GetIndex2(x, y-1, z, res2);
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
 								edges[edgeNum] = vertNum;
 								vertNum++;
-								normals.Add(LerpN(density1, density2,
-									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+
+								normal2 = GetNormal(x, y-1, z, res2, data); 
+
+								normals.Add(Lerp2(density1, density2, normal1, normal2));
 								vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
                             }
                         }
                         if (x > beginx)
                         {
-							density2index = GetIndex(x-1, y, z, res1);
+							density2index = GetIndex2(x-1, y, z, res2);
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
 								edges[edgeNum + 1] = vertNum;
 								vertNum++;
-								normals.Add(LerpN(density1, density2,
-									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+								normal2 = GetNormal(x-1, y, z, res2, data); 
+
+								normals.Add(Lerp2(density1, density2, normal1, normal2));
 								vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
                             }
                         }
                         if (z > beginz)
                         {
-							density2index = GetIndex(x, y, z-1, res1);//currentIndex - res1_2_4;
+							density2index = GetIndex2(x, y, z-1, res2);
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
 								edges[edgeNum + 2] = vertNum;
 								vertNum++;
-								normals.Add(LerpN(density1, density2,
-									data[currentIndex + 1], data[currentIndex + 2], data[currentIndex + 3],
-									data[density2index + 1], data[density2index + 2], data[density2index + 3]));
+								normal2 = GetNormal(x, y, z-1, res2, data); 
+								
+								normals.Add(Lerp2(density1, density2, normal1, normal2));
 								vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
                             }
                         }
@@ -398,6 +409,9 @@ namespace SE.MC
 			int res1_4 = res1 * 4;
 			int res1_2_4 = res1 * res1 * 4;
 
+			int res2 = resolution + 2;
+			int res2_2 = res2 * res2;
+
 			int currentIndex = 0;
 
 			int beginx = begin.x;
@@ -408,23 +422,47 @@ namespace SE.MC
 			int endy = end.y;
 			int endz = end.z;
 
+			float[] densities = new float[8];
+
             for (int x = beginx; x < endx; x++)
             {
                 for (int y = beginy; y < endy; y++)
                 {
                     for (int z = beginz; z < endz; z++)
                     {
-						currentIndex = 4 * ((z * res1 * res1) + (y * res1) + x);
+						currentIndex = ((x * res2 * res2) + (y * res2) + z);
                         byte caseCode = 0;
 						
-                        if (data[currentIndex + res1_2_4] >= 0) caseCode |= 1;
-                        if (data[currentIndex + res1_2_4 + 4] >= 0) caseCode |= 2;
-                        if (data[currentIndex + 4] >= 0) caseCode |= 4;
+                        densities[0] = data[GetIndex2(x, y, z + 1, res2)];
+                        densities[1] = data[GetIndex2(x + 1, y, z + 1, res2)];
+                        densities[2] = data[GetIndex2(x + 1, y, z, res2)];
+                        densities[3] = data[GetIndex2(x, y, z, res2)];
+                        densities[4] = data[GetIndex2(x, y + 1, z + 1, res2)];
+                        densities[5] = data[GetIndex2(x + 1, y + 1, z + 1, res2)];
+                        densities[6] = data[GetIndex2(x + 1, y + 1, z, res2)];
+                        densities[7] = data[GetIndex2(x, y + 1, z, res2)];
+
+                        if (densities[0] >= 0) caseCode |= 1;
+                        if (densities[1] >= 0) caseCode |= 2;
+                        if (densities[2] >= 0) caseCode |= 4;
+                        if (densities[3] >= 0) caseCode |= 8;
+                        if (densities[4] >= 0) caseCode |= 16;
+                        if (densities[5] >= 0) caseCode |= 32;
+                        if (densities[6] >= 0) caseCode |= 64;
+                        if (densities[7] >= 0) caseCode |= 128;
+
+
+
+                        /*if (data[currentIndex + res2_2] >= 0) caseCode |= 1;
+                        if (data[currentIndex + res2_2 + 1] >= 0) caseCode |= 2;
+                        if (data[currentIndex + 1] >= 0) caseCode |= 4;
                         if (data[currentIndex] >= 0) caseCode |= 8;
-                        if (data[currentIndex + res1_4 + res1_2_4] >= 0) caseCode |= 16;
-                        if (data[currentIndex + res1_4 + res1_2_4 + 4] >= 0) caseCode |= 32;
-                        if (data[currentIndex + res1_4 + 4] >= 0) caseCode |= 64;
-                        if (data[currentIndex + res1_4] >= 0) caseCode |= 128;
+                        if (data[currentIndex + res2 + res2_2] >= 0) caseCode |= 16;
+                        if (data[currentIndex + res2 + res2_2 + 1] >= 0) caseCode |= 32;
+                        if (data[currentIndex + res2 + 1] >= 0) caseCode |= 64;
+                        if (data[currentIndex + res2] >= 0) caseCode |= 128;*/
+
+
 
                         if (caseCode == 0 || caseCode == 255) continue;
 
@@ -463,6 +501,30 @@ namespace SE.MC
                 }
             }
         }
+
+
+		public static int GetIndex2(int x, int y, int z, int res2) {
+			return (x * res2 * res2) + (y * res2) + z;	
+		}
+
+		public static Vector3 GetNormal(int x, int y, int z, int res2, float[] data) {
+			int index = GetIndex2(x, y, z, res2);
+
+			float density = data[index];
+
+			float dx = data[GetIndex2(x+1, y, z, res2)] - density;
+			float dy = data[GetIndex2(x, y+1, z, res2)] - density;
+			float dz = data[GetIndex2(x, y, z+1, res2)] - density;
+
+			float total = (dx*dx) + (dy*dy) + (dz*dz);
+			total = Mathf.Sqrt(total);
+
+			dx /= total;
+			dy /= total;
+			dz /= total;
+
+			return new Vector3(dx, dy, dz);
+		}
 
 		public static int GetIndex(int x, int y, int z, int resolution) {
 			return 4 * ((z * resolution * resolution) + (y * resolution) + x);
