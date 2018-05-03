@@ -11,7 +11,7 @@ namespace SE.MC
 		static Algorithm() {
 			noise = new FastNoiseSIMD();
 			noise.SetNoiseType(FastNoiseSIMD.NoiseType.Simplex);
-			noise.SetFrequency(0.0001f);
+			noise.SetFrequency(0.06f);
 		}
 
 		public static bool FillData(int resolution, Vector3Int start, int stepSize, UtilFuncs.Sampler samp, float[] data) {
@@ -63,14 +63,14 @@ namespace SE.MC
 		}
 
 		public static void FillData(int resolution, Chunks.Chunk chunk, float[] data) {
-			noise.FillNoiseSet(data, chunk.Position.x, chunk.Position.y, chunk.Position.z, resolution + 2, resolution + 2, resolution + 2, Mathf.Pow(2, chunk.LOD));
+			noise.FillNoiseSet(data, chunk.Position.x, chunk.Position.y, chunk.Position.z, resolution + 2, resolution + 2, resolution + 2);
 
-			string noiseStr = "Noise: {";
+			/*string noiseStr = "Noise: {";
 			for(int i = 0; i < resolution * resolution; i++) {
 				noiseStr += data[i] + ", ";
 			}
 			noiseStr += "}";
-			Debug.Log(noiseStr);
+			Debug.Log(noiseStr);*/
 
 		}
 
@@ -87,7 +87,7 @@ namespace SE.MC
 			int res1 = resolution + 1;
 
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
-			FillData(resolution + 2, chunk, data);
+			FillData(resolution, chunk, data);
 			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
 
 			int resm1 = resolution - 1;
@@ -150,16 +150,11 @@ namespace SE.MC
         {
 			BenchmarkResult result = new BenchmarkResult();
 			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
-			bool resultb;
 			int res1 = resolution + 1;
 
 			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
-			resultb = FillData(res1, chunk.Position, (int)Mathf.Pow(2, chunk.LOD), samp, data);
+			FillData(resolution, chunk, data);
 			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
-
-			if(resultb == false) {
-				return null;
-			}
 
 			int resm1 = resolution - 1;
 			int resm2 = resolution - 2;
@@ -201,8 +196,6 @@ namespace SE.MC
 
 			//Debug.Log("Phase 2 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
 			//MCVT(vertices, triangles, normals, resolution, lod, data);
-
-			//Debug.Log("Done meshing " + resolution + "^3 chunk. " + "FillData ms: " + fillDataMs + ", CreateVertices ms: " + createVerticesMs + ", Triangulate ms: " + triangulateMs + ", TransitionCell ms: " + transitionCellMs + " (Total: " + (fillDataMs + createVerticesMs + triangulateMs + transitionCellMs) + "ms. )");
 
 			result.createVerticesMs = createVerticesMs;
 			result.fillDataMs = fillDataMs;
@@ -539,6 +532,7 @@ namespace SE.MC
         {
 			int resm2 = resolution - 2;
 			int res1 = resolution + 1;
+			int res2 = resolution + 2;
 
 			int cellMask = 0;
 			int cellLod = 0;
@@ -589,7 +583,7 @@ namespace SE.MC
                                     if ((offset & 32) == 32) pos.z += 1;
 
 									points[j] = pos;
-									densities[j] = data[GetIndex(pos.x, pos.y, pos.z, res1)];
+									densities[j] = data[GetIndex2(pos.x, pos.y, pos.z, res2)];
                                 }
 
 								byte caseCode = 0;
@@ -618,9 +612,14 @@ namespace SE.MC
 										int indexA = GetIndex(points[a].x, points[a].y, points[a].z, res1);
 										int indexB = GetIndex(points[b].x, points[b].y, points[b].z, res1);
 
+										Vector3 na = GetNormal(points[a].x, points[a].y, points[a].z, res2, data);
+										Vector3 nb = GetNormal(points[b].x, points[b].y, points[b].z, res2, data);
+
 										vertices.Add(Lerp2(densities[a], densities[b], points[a], points[b]));
-										normals.Add(LerpN(densities[a], densities[b],
-											data[indexA + 1], data[indexA + 2], data[indexA + 3], data[indexB + 1], data[indexB + 2], data[indexB + 3]));
+
+
+
+										normals.Add(Lerp2(densities[a], densities[b], na, nb));
 										vertList[j] = vertCount++;
 									}
 								}
