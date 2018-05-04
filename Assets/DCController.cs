@@ -58,7 +58,7 @@ public class DCController : MonoBehaviour {
 
 		for(int i = 0; i < BenchmarkTrials; i++) {
 			chunk.Position.x += Resolution;
-			chunk.LODCode = (chunk.LODCode + 1) % 64;
+			chunk.LODCode = 0; //(chunk.LODCode + 1) % 64;
 			SE.MC.Algorithm.BenchmarkResult result = SE.MC.Algorithm.PolygonizeAreaBenchmarked(BenchmarkResolution, UtilFuncs.Sample, chunk, testData);
 			totals.createVerticesMs += result.createVerticesMs;
 			totals.fillDataMs += result.fillDataMs;
@@ -84,7 +84,7 @@ public class DCController : MonoBehaviour {
 		Chunks.Chunk chunk = new Chunks.Chunk();
 		chunk.Position = new Vector3Int(0, 0, 0);
 		//chunk.LOD = 1;
-		chunk.LODCode = 3 + 16 + 32;
+		chunk.LODCode = 0; //3 + 16 + 32;
 
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
@@ -92,7 +92,7 @@ public class DCController : MonoBehaviour {
 		UnityEngine.Profiling.Profiler.BeginSample("PolyganizeArea");
 
 
-		SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk, testData);
+		SE.MC.Algorithm.PolygonizeAreaDecked(Resolution, chunk, testData);
 		UnityEngine.Profiling.Profiler.EndSample();
 
 		sw.Stop();

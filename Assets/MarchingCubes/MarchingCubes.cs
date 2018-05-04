@@ -84,8 +84,8 @@ namespace SE.MC
 					int tri = tris[j];
 
 					if(tri != -1) {
-						tri = 3 * (Tables.MCEdgeToEdgeOffset[tri, 0] * res1_2 +
-							Tables.MCEdgeToEdgeOffset[tri, 1] * res1 +
+						tri = 3 * (Tables.MCEdgeToEdgeOffset[tri, 1] * res1_2 +
+							Tables.MCEdgeToEdgeOffset[tri, 0] * res1 +
 							Tables.MCEdgeToEdgeOffset[tri, 2]) +
 							Tables.MCEdgeToEdgeOffset[tri, 3];
 					}
@@ -170,6 +170,61 @@ namespace SE.MC
 			chunk.Normals = normals;
 			return true;
         }
+
+        public static bool PolygonizeAreaDecked(int resolution, Chunks.Chunk chunk, float[] data)
+        {
+			//GenModifiedTriTable(resolution + 1);
+
+			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
+			int res1 = resolution + 1;
+
+			System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch(); sw.Start();
+			FillData(resolution, chunk, data);
+			sw.Stop(); fillDataMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			int resm1 = resolution - 1;
+			int resm2 = resolution - 2;
+
+			List<Vector3> vertices = new List<Vector3>();
+			List<Vector3> normals = new List<Vector3>();
+			List<int> triangles = new List<int>();
+
+			ushort[] edges = new ushort[res1 * res1 * res1 * 3];
+
+			Vector3Int begin = new Vector3Int(0, 0, 0);
+			Vector3Int end = new Vector3Int(res1, res1, res1);
+
+			byte lod = (byte)chunk.LODCode;
+
+			if((lod & 1) == 1) begin.x += 1;
+			if((lod & 2) == 2) end.x -= 1;
+			
+			if((lod & 4) == 4) begin.y += 1;
+			if((lod & 8) == 8) end.y -= 1;
+			
+			if((lod & 16) == 16) begin.z += 1;
+			if((lod & 32) == 32) end.z -= 1;
+
+
+			DeckMC(begin, end, vertices, normals, triangles, resolution, data);
+
+			sw.Stop(); createVerticesMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+			/*if(lod != 0) {
+				GenerateTransitionCells(vertices, normals, triangles, resolution, data, lod);
+			}*/
+			sw.Stop(); transitionCellMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
+
+			//Debug.Log("Phase 2 of surface extraction took " + sw.ElapsedMilliseconds + " ms.");
+			//MCVT(vertices, triangles, normals, resolution, lod, data);
+
+			Debug.Log("Done meshing decked " + resolution + "^3 chunk. " + "FillData ms: " + fillDataMs + ", CreateVertices ms: " + createVerticesMs + ", TransitionCell ms: " + transitionCellMs + " (Total: " + (fillDataMs + createVerticesMs + transitionCellMs) + "ms. )");
+
+			chunk.Vertices = vertices;
+			chunk.Triangles = triangles.ToArray();
+			chunk.Normals = normals;
+			return true;
+        }
+
 
 		public class BenchmarkResult {
 			public double fillDataMs;
@@ -446,6 +501,192 @@ namespace SE.MC
             }
         }
 
+		public static void DeckMC(Vector3Int begin, Vector3Int end, List<Vector3> vertices, List<Vector3> normals, List<int> triangles, int resolution, float[] data) {
+            int edgeNum = 0;
+            ushort vertNum = 0;
+            float density1, density2;
+			int res1 = resolution + 1;
+            int res1_2 = res1 * res1;
+
+            int res1_3 = res1 * 3;
+            int res1_2_3 = res1 * res1 * 3;
+
+			int res1_4 = res1 * 4;
+			int res1_2_4 = res1 * res1 * 4;
+
+			int res2 = res1 + 1;
+			int res2_2 = res2 * res2;
+
+			int currentIndex = 0;
+			int density2index = 0;
+
+			int beginx = begin.x;
+			int beginy = begin.y;
+			int beginz = begin.z;
+
+			int endx = end.x;
+			int endy = end.y;
+			int endz = end.z;
+
+			float total;
+			float n1x, n1y, n1z, n2x, n2y, n2z, mu;
+
+			int edgeArraySize = res1 * res1 * 2 * 3;
+			ushort[] edges = new ushort[res1 * res1 * 2 * 3];
+			int currentDeck = 0;
+			ushort t1, t2, t3;
+
+			for (int y = beginy; y < endy; y++)
+			{
+				// Generate vertices for a deck
+				for (int x = beginx; x < endx; x++)
+				{
+                    for (int z = beginz; z < endz; z++)
+                    {
+						currentIndex = (x * res2 * res2) + (y * res2) + z;
+						edgeNum = 3 * ((currentDeck * res1 * res1) + (x * res1) + z);
+                        density1 = data[currentIndex];
+
+						n1x = data[currentIndex + res2_2] - density1;
+						n1y = data[currentIndex + res2] - density1;
+						n1z = data[currentIndex + 1] - density1;
+
+						total = (n1x*n1x) + (n1y*n1y) + (n1z*n1z);
+						total = Mathf.Sqrt(total);
+
+						n1x /= total;
+						n1y /= total;
+						n1z /= total;
+
+                        if (y > beginy)
+                        {
+							density2index = currentIndex - res2;
+                            density2 = data[density2index];
+                            if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
+                            {
+								edges[edgeNum] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
+
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
+
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
+
+								mu = density1 / (density1 - density2);
+
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x, y - mu, z));
+                            }
+                        }
+                        if (x > beginx)
+                        {
+							density2index = currentIndex - res2_2;
+                            density2 = data[density2index];
+                            if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
+                            {
+								edges[edgeNum + 1] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
+
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
+
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
+
+								mu = density1 / (density1 - density2);
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x - mu, y, z));
+                            }
+                        }
+                        if (z > beginz)
+                        {
+							density2index = currentIndex - 1;
+                            density2 = data[density2index];
+                            if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
+                            {
+								edges[edgeNum + 2] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
+
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
+
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
+								
+								mu = density1 / (density1 - density2);
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x, y, z - mu));
+                            }
+                        }
+                    }
+                }
+
+				// Generate indices for a deck
+                for (int x = beginx; y < endx - 1; y++)
+                {
+                    for (int z = beginz; z < endz - 1; z++)
+                    {
+						currentIndex = ((x * res2 * res2) + (y * res2) + z);
+                        byte caseCode = 0;
+
+                        if (data[currentIndex + 1] >= 0) caseCode |= 1;
+                        if (data[currentIndex + res2_2 + 1] >= 0) caseCode |= 2;
+                        if (data[currentIndex + res2_2] >= 0) caseCode |= 4;
+                        if (data[currentIndex] >= 0) caseCode |= 8;
+                        if (data[currentIndex + res2 + 1] >= 0) caseCode |= 16;
+                        if (data[currentIndex + res2_2 + res2 + 1] >= 0) caseCode |= 32;
+                        if (data[currentIndex + res2_2 + res2] >= 0) caseCode |= 64;
+                        if (data[currentIndex + res2] >= 0) caseCode |= 128;
+
+
+
+                        /*if (data[currentIndex + res2_2] >= 0) caseCode |= 1;
+                        if (data[currentIndex + res2_2 + 1] >= 0) caseCode |= 2;
+                        if (data[currentIndex + 1] >= 0) caseCode |= 4;
+                        if (data[currentIndex] >= 0) caseCode |= 8;
+                        if (data[currentIndex + res2 + res2_2] >= 0) caseCode |= 16;
+                        if (data[currentIndex + res2 + res2_2 + 1] >= 0) caseCode |= 32;
+                        if (data[currentIndex + res2 + 1] >= 0) caseCode |= 64;
+                        if (data[currentIndex + res2] >= 0) caseCode |= 128;*/
+
+
+
+                        if (caseCode == 0 || caseCode == 255) continue;
+
+						int currentEdge = 3 * (res1_2 * y + res1 * x + z);
+
+                        for (int i = 0; Tables.triTable[caseCode][i] != -1; i += 3)
+                        {
+							t1 = edges[(currentEdge + Tables.m2TriTable[caseCode][i]) % edgeArraySize];
+							t2 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+1]) % edgeArraySize];
+							t3 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+2]) % edgeArraySize];
+
+
+                            if (t1 != t2 && t2 != t3 && t1 != t3)
+                            {
+                                triangles.Add(t1);
+                                triangles.Add(t2);
+                                triangles.Add(t3);
+                            }
+                        }
+
+                    }
+                }
+
+				currentDeck = (currentDeck + 1) % 2;
+            }
+
+		}
 
 
 
