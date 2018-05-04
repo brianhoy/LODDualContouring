@@ -74,6 +74,36 @@ namespace SE.MC
 
 		}
 
+		public static void GenModifiedTriTable(int res1) {
+			int res1_2 = res1 * res1;
+			string str = "public readonly static int[][] mTriTable  = new int[][] {\n";
+			for(int i = 0; i < Tables.triTable.Length; i++) {
+				int[] tris = Tables.triTable[i];
+				str += "	new int[] {";
+				for(int j = 0; j < tris.Length; j++) {
+					int tri = tris[j];
+
+					if(tri != -1) {
+						tri = 3 * (Tables.MCEdgeToEdgeOffset[tri, 0] * res1_2 +
+							Tables.MCEdgeToEdgeOffset[tri, 1] * res1 +
+							Tables.MCEdgeToEdgeOffset[tri, 2]) +
+							Tables.MCEdgeToEdgeOffset[tri, 3];
+					}
+
+					str += tri;
+					if(j < tris.Length - 1) {
+						str += ", ";
+					}
+				}
+				str += "}, \n";
+
+			}
+			str += "}";
+#if UNITY_EDITOR
+			UnityEditor.EditorGUIUtility.systemCopyBuffer = str;
+#endif
+			Debug.Log("Modified Triangle Table: \n" + str);
+		}
 		public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk) {
 			int res2 = resolution + 2;
 			float[] data = new float[res2*res2*res2];
@@ -83,6 +113,8 @@ namespace SE.MC
 
         public static bool PolygonizeArea(int resolution, UtilFuncs.Sampler samp, Chunks.Chunk chunk, float[] data)
         {
+			GenModifiedTriTable(resolution + 1);
+
 			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
 			int res1 = resolution + 1;
 
@@ -213,7 +245,6 @@ namespace SE.MC
             int edgeNum = 0;
             ushort vertNum = 0;
             float density1, density2;
-			Vector3 normal1, normal2;
 			int res2 = res1 + 1;
 
             int res1_3 = res1 * 3;
@@ -221,6 +252,8 @@ namespace SE.MC
 
 			int res1_4 = res1 * 4;
 			int res1_2_4 = res1 * res1 * 4;
+
+			int res2_2 = res2 * res2;
 
 			int currentIndex = 0;
 			int density2index = 0;
@@ -233,6 +266,9 @@ namespace SE.MC
 			int endy = end.y;
 			int endz = end.z;
 
+			float density, total;
+			float n1x, n1y, n1z, n2x, n2y, n2z, mu;
+
             for (int x = beginx; x < endx; x++)
             {
                 for (int y = beginy; y < endy; y++)
@@ -240,51 +276,89 @@ namespace SE.MC
                     for (int z = beginz; z < endz; z++)
                     {
 						currentIndex = (x * res2 * res2) + (y * res2) + z;
-						edgeNum = 3 * (x * res1 * res1) + (y * res1) + z;
+						edgeNum = 3 * ((x * res1 * res1) + (y * res1) + z);
                         density1 = data[currentIndex];
-						normal1 = GetNormal(x, y, z, res2, data);
+
+						density = data[currentIndex];
+						n1x = data[currentIndex + res2_2] - density;
+						n1y = data[currentIndex + res2] - density;
+						n1z = data[currentIndex + 1] - density;
+
+						total = (n1x*n1x) + (n1y*n1y) + (n1z*n1z);
+						total = Mathf.Sqrt(total);
+
+						n1x /= total;
+						n1y /= total;
+						n1z /= total;
 
                         if (y > beginy)
                         {
-							density2index = GetIndex2(x, y-1, z, res2);
+							density2index = currentIndex - res2;
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-								edges[edgeNum] = vertNum;
-								vertNum++;
+								edges[edgeNum] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
 
-								normal2 = GetNormal(x, y-1, z, res2, data); 
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
 
-								normals.Add(Lerp2(density1, density2, normal1, normal2));
-								vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
+
+								mu = density1 / (density1 - density2);
+
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x, y - mu, z));
                             }
                         }
                         if (x > beginx)
                         {
-							density2index = GetIndex2(x-1, y, z, res2);
+							density2index = currentIndex - res2_2;
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-								edges[edgeNum + 1] = vertNum;
-								vertNum++;
-								normal2 = GetNormal(x-1, y, z, res2, data); 
+								edges[edgeNum + 1] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
 
-								normals.Add(Lerp2(density1, density2, normal1, normal2));
-								vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
+
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
+
+								mu = density1 / (density1 - density2);
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x - mu, y, z));
                             }
                         }
                         if (z > beginz)
                         {
-							density2index = GetIndex2(x, y, z-1, res2);
+							density2index = currentIndex - 1;
                             density2 = data[density2index];
                             if ((density1 >= 0 && density2 < 0) || (density2 >= 0 && density1 < 0))
                             {
-								edges[edgeNum + 2] = vertNum;
-								vertNum++;
-								normal2 = GetNormal(x, y, z-1, res2, data); 
+								edges[edgeNum + 2] = vertNum++;
+								n2x = data[density2index + res2_2] - density2;
+								n2y = data[density2index + res2] - density2;
+								n2z = data[density2index + 1] - density2;
+
+								total = (n2x*n2x) + (n2y*n2y) + (n2z*n2z);
+								total = Mathf.Sqrt(total);
+
+								n2x /= total;
+								n2y /= total;
+								n2z /= total;
 								
-								normals.Add(Lerp2(density1, density2, normal1, normal2));
-								vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
+								mu = density1 / (density1 - density2);
+								normals.Add(new Vector3(n1x + mu * (n2x - n1x), n1y + mu * (n2y - n1y), n1z + mu * (n2z - n1z)));
+								vertices.Add(new Vector3(x, y, z - mu));
                             }
                         }
                     }
@@ -315,8 +389,6 @@ namespace SE.MC
 			int endy = end.y;
 			int endz = end.z;
 
-			float[] densities = new float[8];
-
             for (int x = beginx; x < endx; x++)
             {
                 for (int y = beginy; y < endy; y++)
@@ -325,24 +397,15 @@ namespace SE.MC
                     {
 						currentIndex = ((x * res2 * res2) + (y * res2) + z);
                         byte caseCode = 0;
-						
-                        densities[0] = data[GetIndex2(x, y, z + 1, res2)];
-                        densities[1] = data[GetIndex2(x + 1, y, z + 1, res2)];
-                        densities[2] = data[GetIndex2(x + 1, y, z, res2)];
-                        densities[3] = data[GetIndex2(x, y, z, res2)];
-                        densities[4] = data[GetIndex2(x, y + 1, z + 1, res2)];
-                        densities[5] = data[GetIndex2(x + 1, y + 1, z + 1, res2)];
-                        densities[6] = data[GetIndex2(x + 1, y + 1, z, res2)];
-                        densities[7] = data[GetIndex2(x, y + 1, z, res2)];
 
-                        if (densities[0] >= 0) caseCode |= 1;
-                        if (densities[1] >= 0) caseCode |= 2;
-                        if (densities[2] >= 0) caseCode |= 4;
-                        if (densities[3] >= 0) caseCode |= 8;
-                        if (densities[4] >= 0) caseCode |= 16;
-                        if (densities[5] >= 0) caseCode |= 32;
-                        if (densities[6] >= 0) caseCode |= 64;
-                        if (densities[7] >= 0) caseCode |= 128;
+                        if (data[currentIndex + 1] >= 0) caseCode |= 1;
+                        if (data[currentIndex + res2_2 + 1] >= 0) caseCode |= 2;
+                        if (data[currentIndex + res2_2] >= 0) caseCode |= 4;
+                        if (data[currentIndex] >= 0) caseCode |= 8;
+                        if (data[currentIndex + res2 + 1] >= 0) caseCode |= 16;
+                        if (data[currentIndex + res2_2 + res2 + 1] >= 0) caseCode |= 32;
+                        if (data[currentIndex + res2_2 + res2] >= 0) caseCode |= 64;
+                        if (data[currentIndex + res2] >= 0) caseCode |= 128;
 
 
 
@@ -359,28 +422,16 @@ namespace SE.MC
 
                         if (caseCode == 0 || caseCode == 255) continue;
 
+						int currentEdge = 3 * (res1_2 * x + res1 * y + z);
+
                         for (int i = 0; Tables.triTable[caseCode][i] != -1; i += 3)
                         {
                             mcEdge = Tables.triTable[caseCode][i];
-                            t1 = edges[3 * (
-                                ((x + Tables.MCEdgeToEdgeOffset[mcEdge, 0]) * res1_2) +
-                                ((y + Tables.MCEdgeToEdgeOffset[mcEdge, 1]) * res1) +
-                                   z + Tables.MCEdgeToEdgeOffset[mcEdge, 2]) +
-                                       Tables.MCEdgeToEdgeOffset[mcEdge, 3]];
 
-                            mcEdge = Tables.triTable[caseCode][i + 1];
-                            t2 = edges[3 * (
-                                ((x + Tables.MCEdgeToEdgeOffset[mcEdge, 0]) * res1_2) +
-                                ((y + Tables.MCEdgeToEdgeOffset[mcEdge, 1]) * res1) +
-                                   z + Tables.MCEdgeToEdgeOffset[mcEdge, 2]) +
-                                       Tables.MCEdgeToEdgeOffset[mcEdge, 3]];
+							t1 = edges[currentEdge + Tables.mTriTable[caseCode][i]];
+							t2 = edges[currentEdge + Tables.mTriTable[caseCode][i+1]];
+							t3 = edges[currentEdge + Tables.mTriTable[caseCode][i+2]];
 
-                            mcEdge = Tables.triTable[caseCode][i + 2];
-                            t3 = edges[3 * (
-                                ((x + Tables.MCEdgeToEdgeOffset[mcEdge, 0]) * res1_2) +
-                                ((y + Tables.MCEdgeToEdgeOffset[mcEdge, 1]) * res1) +
-                                   z + Tables.MCEdgeToEdgeOffset[mcEdge, 2]) +
-                                       Tables.MCEdgeToEdgeOffset[mcEdge, 3]];
 
                             if (t1 != t2 && t2 != t3 && t1 != t3)
                             {
@@ -558,7 +609,7 @@ namespace SE.MC
 				return new Vector3(x2, y2, z2);
 			}*/
 
-			float mu = Mathf.Round((density1) / (density1 - density2) * 256) / 256.0f;
+			float mu = (density1) / (density1 - density2);
 
 			return new Vector3(x1 + mu * (x2 - x1), y1 + mu * (y2 - y1), z1 + mu * (z2 - z1));
 		}
