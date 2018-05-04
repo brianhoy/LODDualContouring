@@ -89,7 +89,11 @@ public class DCController : MonoBehaviour {
 		System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
 		sw.Start();
 
+		UnityEngine.Profiling.Profiler.BeginSample("PolyganizeArea");
+
+
 		SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk, testData);
+		UnityEngine.Profiling.Profiler.EndSample();
 
 		sw.Stop();
 		Debug.Log("Time to mesh " + Resolution + "^3 chunk: " + sw.Elapsed.Milliseconds + " ms");

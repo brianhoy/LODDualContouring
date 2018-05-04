@@ -239,8 +239,8 @@ namespace SE.MC
                 {
                     for (int z = beginz; z < endz; z++)
                     {
-						edgeNum = GetEdge3DB(x, y, z, 0, res1);
-						currentIndex = GetIndex2(x, y, z, res2);
+						currentIndex = (x * res2 * res2) + (y * res2) + z;
+						edgeNum = 3 * (x * res1 * res1) + (y * res1) + z;
                         density1 = data[currentIndex];
 						normal1 = GetNormal(x, y, z, res2, data);
 
@@ -291,106 +291,6 @@ namespace SE.MC
                 }
             }
         }
-
-        /*public static void CreateVertices(ushort[] edges, Vector3Int begin, Vector3Int end, List<Vector3> vertices, List<Vector3> normals, int res1, float[] data)
-        {
-			//Debug.Log("CreateVertices called with begin " + begin + ", end: " + end);
-
-            int edgeNum = 0;
-            ushort vertNum = 0;
-            float density1, density2;
-
-            int res1_3 = res1 * 3;
-            int res1_2_3 = res1 * res1 * 3;
-
-            for (int x = begin.x; x < end.x; x++)
-            {
-                for (int y = begin.y; y < end.y; y++)
-                {
-                    for (int z = begin.z; z < end.z; z++, edgeNum += 3)
-                    {
-						int currentIndex = GetIndex(x, y, z, res1);
-                        //density1 = data[currentIndex];
-
-
-                        edgeNum = GetEdge3D(x, y, z, 0, res1);
-                        density1 = data[currentIndex];
-
-                        if (density1 == 0)
-                        {
-                            edges[edgeNum] = vertNum;
-                            edges[edgeNum + 1] = vertNum;
-                            edges[edgeNum + 2] = vertNum;
-                            vertNum++;
-                            normals.Add(new Vector3(data[currentIndex+1], data[currentIndex+2], data[currentIndex+3]));
-                            vertices.Add(new Vector3(x, y, z));
-                            continue;
-                        }
-                        if (y >= begin.y + 1)
-                        {
-                            density2 = data[x][y - 1][z][0];
-                            if ((density1 & 256) != (density2 & 256))
-                            {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum] = edges[edgeNum - res1_3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[x][y][z][1], data[x][y][z][2], data[x][y][z][3],
-                                        data[x][y - 1][z][1], data[x][y - 1][z][2], data[x][y - 1][z][3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x, y - 1, z));
-                                }
-                            }
-                        }
-                        if (x >= begin.x + 1)
-                        {
-                            density2 = data[x - 1][y][z][0];
-                            if ((density1 & 256) != (density2 & 256))
-                            {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum + 1] = edges[edgeNum - res1_2_3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum + 1] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[x][y][z][1], data[x][y][z][2], data[x][y][z][3],
-                                        data[x - 1][y][z][1], data[x - 1][y][z][2], data[x - 1][y][z][3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x - 1, y, z));
-                                }
-                            }
-                        }
-                        if (z >= begin.z + 1)
-                        {
-                            density2 = data[x][y][z - 1][0];
-                            if ((density1 & 256) != (density2 & 256))
-                            {
-                                if (density2 == 0)
-                                {
-                                    edges[edgeNum + 2] = edges[edgeNum - 3];
-                                }
-                                else
-                                {
-                                    edges[edgeNum + 2] = vertNum;
-                                    vertNum++;
-                                    normals.Add(LerpN(density1, density2,
-                                        data[x][y][z][1], data[x][y][z][2], data[x][y][z][3],
-                                        data[x][y][z - 1][1], data[x][y][z - 1][2], data[x][y][z - 1][3]));
-                                    vertices.Add(Lerp(density1, density2, x, y, z, x, y, z - 1));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }*/
-
         public static void Triangulate(ushort[] edges, Vector3Int begin, Vector3Int end, List<int> triangles, int resolution, float[] data)
         {
             int mcEdge;
@@ -496,37 +396,7 @@ namespace SE.MC
         }
 
 
-		public static int GetIndex2(int x, int y, int z, int res2) {
-			return (x * res2 * res2) + (y * res2) + z;	
-		}
 
-		public static Vector3 GetNormal(int x, int y, int z, int res2, float[] data) {
-			int index = GetIndex2(x, y, z, res2);
-
-			float density = data[index];
-
-			float dx = data[GetIndex2(x+1, y, z, res2)] - density;
-			float dy = data[GetIndex2(x, y+1, z, res2)] - density;
-			float dz = data[GetIndex2(x, y, z+1, res2)] - density;
-
-			float total = (dx*dx) + (dy*dy) + (dz*dz);
-			total = Mathf.Sqrt(total);
-
-			dx /= total;
-			dy /= total;
-			dz /= total;
-
-			return new Vector3(dx, dy, dz);
-		}
-
-		public static int GetIndex(int x, int y, int z, int resolution) {
-			return 4 * ((z * resolution * resolution) + (y * resolution) + x);
-		}
-
-        public static int GetEdge3D(int x, int y, int z, int edgeNum, int res)
-        {
-            return (3 * ((z * res * res) + (y * res) + x)) + edgeNum;
-        }
 
         public static void GenerateTransitionCells(List<Vector3> vertices, List<Vector3> normals, List<int> triangles, int resolution, float[] data, byte lod)
         {
@@ -638,11 +508,41 @@ namespace SE.MC
                 }
             }
         }
+
+		public static int GetIndex(int x, int y, int z, int resolution) {
+			return 4 * ((z * resolution * resolution) + (y * resolution) + x);
+		}
+
+        public static int GetEdge3D(int x, int y, int z, int edgeNum, int res)
+        {
+            return (3 * ((z * res * res) + (y * res) + x)) + edgeNum;
+        }
         public static int GetEdge3DB(int x, int y, int z, int edgeNum, int res)
         {
             return (3 * ((x * res * res) + (y * res) + z)) + edgeNum;
         }
+		public static int GetIndex2(int x, int y, int z, int res2) {
+			return (x * res2 * res2) + (y * res2) + z;	
+		}
 
+		public static Vector3 GetNormal(int x, int y, int z, int res2, float[] data) {
+			int index = GetIndex2(x, y, z, res2);
+
+			float density = data[index];
+
+			float dx = data[GetIndex2(x+1, y, z, res2)] - density;
+			float dy = data[GetIndex2(x, y+1, z, res2)] - density;
+			float dz = data[GetIndex2(x, y, z+1, res2)] - density;
+
+			float total = (dx*dx) + (dy*dy) + (dz*dz);
+			total = Mathf.Sqrt(total);
+
+			dx /= total;
+			dy /= total;
+			dz /= total;
+
+			return new Vector3(dx, dy, dz);
+		}
 
 		public static Vector3 Lerp(float density1, float density2, float x1, float y1, float z1, float x2, float y2, float z2)
 		{
