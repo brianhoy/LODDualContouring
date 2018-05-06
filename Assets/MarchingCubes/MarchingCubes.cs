@@ -77,18 +77,33 @@ namespace SE.MC
 		public static void GenModifiedTriTable(int res1) {
 			int res1_2 = res1 * res1;
 			string str = "public readonly static int[][] mTriTable  = new int[][] {\n";
+
+			int[][] modifiedTriTable = new int[Tables.triTable.Length][];
+
 			for(int i = 0; i < Tables.triTable.Length; i++) {
 				int[] tris = Tables.triTable[i];
+				modifiedTriTable[i] = new int[tris.Length];
 				str += "	new int[] {";
 				for(int j = 0; j < tris.Length; j++) {
 					int tri = tris[j];
 
 					if(tri != -1) {
-						tri = 3 * (Tables.MCEdgeToEdgeOffset[tri, 1] * res1_2 +
+						tri = GetEdgeIndex(
+							Tables.MCEdgeToEdgeOffset[tri, 0], 
+							Tables.MCEdgeToEdgeOffset[tri, 1], 
+							Tables.MCEdgeToEdgeOffset[tri, 2], 
+							Tables.MCEdgeToEdgeOffset[tri, 3], res1);
+						/*(3 * ((Tables.MCEdgeToEdgeOffset[tri, 1] * res1 * res1) + 
+							(Tables.MCEdgeToEdgeOffset[tri, 0] * res1) + 
+							Tables.MCEdgeToEdgeOffset[tri, 2])) + 
+							Tables.MCEdgeToEdgeOffset[tri, 3]; */
+						/*3 * (Tables.MCEdgeToEdgeOffset[tri, 1] * res1_2 +
 							Tables.MCEdgeToEdgeOffset[tri, 0] * res1 +
 							Tables.MCEdgeToEdgeOffset[tri, 2]) +
-							Tables.MCEdgeToEdgeOffset[tri, 3];
+							Tables.MCEdgeToEdgeOffset[tri, 3];*/
 					}
+
+					modifiedTriTable[i][j] = tri;
 
 					str += tri;
 					if(j < tris.Length - 1) {
@@ -96,7 +111,7 @@ namespace SE.MC
 					}
 				}
 				str += "}, \n";
-
+				Tables.m2TriTable = modifiedTriTable;
 			}
 			str += "}";
 #if UNITY_EDITOR
@@ -173,7 +188,7 @@ namespace SE.MC
 
         public static bool PolygonizeAreaDecked(int resolution, Chunks.Chunk chunk, float[] data)
         {
-			//GenModifiedTriTable(resolution + 1);
+			GenModifiedTriTable(resolution + 1);
 
 			double fillDataMs, createVerticesMs, triangulateMs, transitionCellMs = 0;
 			int res1 = resolution + 1;
@@ -532,11 +547,11 @@ namespace SE.MC
 			float n1x, n1y, n1z, n2x, n2y, n2z, mu;
 
 			int edgeArraySize = res1 * res1 * 2 * 3;
-			ushort[] edges = new ushort[res1 * res1 * 2 * 3];
+			ushort[] edges = new ushort[edgeArraySize];
 			int currentDeck = 0;
 			ushort t1, t2, t3;
 
-			for (int y = beginy; y < endy; y++)
+			for (int y = beginy, ty = beginy - 1; y < endy; y++, ty++)
 			{
 				// Generate vertices for a deck
 				for (int x = beginx; x < endx; x++)
@@ -544,7 +559,7 @@ namespace SE.MC
                     for (int z = beginz; z < endz; z++)
                     {
 						currentIndex = (x * res2 * res2) + (y * res2) + z;
-						edgeNum = 3 * ((currentDeck * res1 * res1) + (x * res1) + z);
+						edgeNum = GetEdgeIndex(x, y, z, 0, res1); //3 * ((currentDeck * res1 * res1) + (x * res1) + z);
                         density1 = data[currentIndex];
 
 						n1x = data[currentIndex + res2_2] - density1;
@@ -632,11 +647,13 @@ namespace SE.MC
                 }
 
 				// Generate indices for a deck
-                for (int x = beginx; y < endx - 1; y++)
+				if(ty == beginy - 1 || ty >= endy) continue;
+
+                for (int x = beginx; x < endx - 1; x++)
                 {
                     for (int z = beginz; z < endz - 1; z++)
                     {
-						currentIndex = ((x * res2 * res2) + (y * res2) + z);
+						currentIndex = ((x * res2 * res2) + (ty * res2) + z);
                         byte caseCode = 0;
 
                         if (data[currentIndex + 1] >= 0) caseCode |= 1;
@@ -648,28 +665,58 @@ namespace SE.MC
                         if (data[currentIndex + res2_2 + res2] >= 0) caseCode |= 64;
                         if (data[currentIndex + res2] >= 0) caseCode |= 128;
 
-
-
-                        /*if (data[currentIndex + res2_2] >= 0) caseCode |= 1;
-                        if (data[currentIndex + res2_2 + 1] >= 0) caseCode |= 2;
-                        if (data[currentIndex + 1] >= 0) caseCode |= 4;
-                        if (data[currentIndex] >= 0) caseCode |= 8;
-                        if (data[currentIndex + res2 + res2_2] >= 0) caseCode |= 16;
-                        if (data[currentIndex + res2 + res2_2 + 1] >= 0) caseCode |= 32;
-                        if (data[currentIndex + res2 + 1] >= 0) caseCode |= 64;
-                        if (data[currentIndex + res2] >= 0) caseCode |= 128;*/
-
-
-
                         if (caseCode == 0 || caseCode == 255) continue;
 
-						int currentEdge = 3 * (res1_2 * y + res1 * x + z);
+						int currentEdge = GetEdgeIndex(x, ty, z, 0, res1); //3 * (res1_2 * ty%2 + res1 * x + z);
 
                         for (int i = 0; Tables.triTable[caseCode][i] != -1; i += 3)
                         {
+							int mcEdge;
+							/*int mcEdge = Tables.triTable[caseCode][i]; 
+							
+							//t1 = 3 * 
+
+							//Tables.MCEdgeToEdgeOffset[i];*/
+							int index2 = currentEdge + Tables.m2TriTable[caseCode][i];
+
+							index2 = ((index2)) % edgeArraySize;
+
+							/*if(index2 > edgeArraySize) {
+								index2 -= res1_2;
+							}*/
+
+                            mcEdge = Tables.triTable[caseCode][i];
+							int index = GetEdgeIndex(
+								x + Tables.MCEdgeToEdgeOffset[mcEdge, 0], 
+								ty + Tables.MCEdgeToEdgeOffset[mcEdge, 1], 
+								z + Tables.MCEdgeToEdgeOffset[mcEdge, 2], 
+								Tables.MCEdgeToEdgeOffset[mcEdge, 3], res1);
+
+							if(index2 > edgeArraySize) {
+								Debug.Log("Index greater than edge array size. EdgeArray size: " + edgeArraySize + ", Index2: " + index2 + ", TrueIndex: " + index + ", Lookup Table value for case " + caseCode + " tri " + i + ": " + Tables.m2TriTable[caseCode][i] + ", res1_2: " + res1_2);
+							}
+
 							t1 = edges[(currentEdge + Tables.m2TriTable[caseCode][i]) % edgeArraySize];
-							t2 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+1]) % edgeArraySize];
-							t3 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+2]) % edgeArraySize];
+							//t2 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+1]) % edgeArraySize];
+							//t3 = edges[(currentEdge + Tables.m2TriTable[caseCode][i+2]) % edgeArraySize];
+
+                           // t1 = edges[index];
+
+                            mcEdge = Tables.triTable[caseCode][i + 1];
+							index = GetEdgeIndex(
+								x + Tables.MCEdgeToEdgeOffset[mcEdge, 0], 
+								ty + Tables.MCEdgeToEdgeOffset[mcEdge, 1], 
+								z + Tables.MCEdgeToEdgeOffset[mcEdge, 2], 
+								Tables.MCEdgeToEdgeOffset[mcEdge, 3], res1);
+                            t2 = edges[index];
+
+                            mcEdge = Tables.triTable[caseCode][i + 2];
+							index = GetEdgeIndex(
+								x + Tables.MCEdgeToEdgeOffset[mcEdge, 0], 
+								ty + Tables.MCEdgeToEdgeOffset[mcEdge, 1], 
+								z + Tables.MCEdgeToEdgeOffset[mcEdge, 2], 
+								Tables.MCEdgeToEdgeOffset[mcEdge, 3], res1);
+                            t3 = edges[index];
 
 
                             if (t1 != t2 && t2 != t3 && t1 != t3)
@@ -681,14 +728,16 @@ namespace SE.MC
                         }
 
                     }
-                }
+				}
 
 				currentDeck = (currentDeck + 1) % 2;
             }
 
 		}
 
-
+		public static int GetEdgeIndex(int x, int y, int z, int edgeNum, int res1) {
+			return 3 * (( (y%2) * res1 * res1) + (x * res1) + z) + edgeNum;
+		}
 
         public static void GenerateTransitionCells(List<Vector3> vertices, List<Vector3> normals, List<int> triangles, int resolution, float[] data, byte lod)
         {

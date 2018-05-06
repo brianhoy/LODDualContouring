@@ -41,8 +41,11 @@ public class DCController : MonoBehaviour {
 	// Update is called once per frame
 	void Update () {
 		if(Input.GetKeyDown(KeyCode.R)) {
-			CreateTestChunk();
+			CreateTestChunk(false);
 			//DualContouringTest();
+		}
+		if(Input.GetKeyDown(KeyCode.F)) {
+			CreateTestChunk(true);
 		}
 		if(Input.GetKeyDown(KeyCode.B)) {
 			Benchmark();
@@ -76,7 +79,7 @@ public class DCController : MonoBehaviour {
 		UConsole.Print(result2);
 	}
 
-	void CreateTestChunk() {
+	void CreateTestChunk(bool decked) {
 		if(testChunk != null) {
 			Object.Destroy(testChunk.UnityObject);
 		}
@@ -91,8 +94,13 @@ public class DCController : MonoBehaviour {
 
 		UnityEngine.Profiling.Profiler.BeginSample("PolyganizeArea");
 
+		if(decked) {
+			SE.MC.Algorithm.PolygonizeAreaDecked(Resolution, chunk, testData);
+		}
+		else {
+			SE.MC.Algorithm.PolygonizeArea(Resolution, UtilFuncs.Sample, chunk);
+		}
 
-		SE.MC.Algorithm.PolygonizeAreaDecked(Resolution, chunk, testData);
 		UnityEngine.Profiling.Profiler.EndSample();
 
 		sw.Stop();

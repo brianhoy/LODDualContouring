@@ -540,7 +540,7 @@ public readonly static int[][] mTriTable  = new int[][] {
 	new int[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, 
 };
 
-public readonly static int[][] m2TriTable  = new int[][] {
+public static int[][] m2TriTable  = new int[][] {
 	new int[] {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, 
 	new int[] {103, 3270, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, 
 	new int[] {103, 104, 3369, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, 
